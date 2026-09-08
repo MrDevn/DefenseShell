@@ -203,7 +203,7 @@ fun MainAgentScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "ClaudeShell",
+                            text = "CodeStudio",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -379,7 +379,7 @@ fun MainAgentScreen(
                                 Icon(
                                     imageVector = Icons.Default.CloudQueue,
                                     contentDescription = null,
-                                    tint = if (activeConnection != null) ClaudeTerracotta else Color(0xFFE65100),
+                                    tint = if (activeConnection != null) ClaudeTerracotta else ClaudeDanger,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -447,10 +447,10 @@ fun MainAgentScreen(
                             // Custom Connection Pill in Header
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
-                                color = if (activeConnection != null) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFF3E0),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) else Color(0xFFFFA726)
+                                    if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) else ClaudeDanger.copy(alpha = 0.5f)
                                 ),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
@@ -465,7 +465,7 @@ fun MainAgentScreen(
                                         modifier = Modifier
                                             .size(7.dp)
                                             .clip(CircleShape)
-                                            .background(if (activeConnection != null) ClaudeSuccess else Color(0xFFE65100))
+                                            .background(if (activeConnection != null) ClaudeSuccess else ClaudeDanger)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
@@ -477,7 +477,7 @@ fun MainAgentScreen(
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.Medium,
                                             fontSize = 12.sp,
-                                            color = if (activeConnection != null) MaterialTheme.colorScheme.onSurface else Color(0xFFE65100)
+                                            color = if (activeConnection != null) MaterialTheme.colorScheme.onSurface else ClaudeDanger
                                         ),
                                         maxLines = 1
                                     )
@@ -552,7 +552,7 @@ fun MainAgentScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = if (operationMode == AgentOperationMode.EXTRA) "⚡ Extra" else "🛡️ Safety",
+                                        text = if (operationMode == AgentOperationMode.EXTRA) "Extra" else "Safety",
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
@@ -783,7 +783,7 @@ fun ClaudeChatView(
         // Connection warning banner if not configured
         if (activeConnection == null) {
             Surface(
-                color = Color(0xFFFFF3E0),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onOpenConnectionSettings() }
@@ -795,7 +795,7 @@ fun ClaudeChatView(
                     Icon(
                         imageVector = Icons.Default.WarningAmber,
                         contentDescription = null,
-                        tint = Color(0xFFE65100),
+                        tint = ClaudeDanger,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -804,21 +804,21 @@ fun ClaudeChatView(
                             text = "Подключение не настроено",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE65100),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 12.sp
                             )
                         )
                         Text(
-                            text = "Вкладка Free 🎁 — бесплатные модели без настройки, или укажите свой API",
+                            text = "Добавьте base-url, api-key и model-id",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF5D4037),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
                             )
                         )
                     }
                     Button(
                         onClick = onOpenConnectionSettings,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text("Настроить", fontSize = 11.sp)
@@ -882,9 +882,9 @@ fun ClaudeChatView(
                                 Text(
                                     text = when (agentStage) {
                                         AgentStage.CONNECTING -> "Подключение к API..."
-                                        AgentStage.THINKING -> "🧠 Thinking — агент думает над задачей..."
+                                        AgentStage.THINKING -> "Thinking — анализ задачи..."
                                         AgentStage.RESPONDING -> "Генерация ответа..."
-                                        AgentStage.EXECUTING -> "⚙️ Выполнение действий агента..."
+                                        AgentStage.EXECUTING -> "Выполнение действий..."
                                         AgentStage.IDLE -> "Отправка запроса к API и генерация ответа..."
                                     },
                                     style = MaterialTheme.typography.bodySmall.copy(
@@ -907,7 +907,7 @@ fun ClaudeChatView(
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
                                         Text(
-                                            text = "💭 Мысли агента",
+                                            text = "Мысли агента",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = ClaudeTerracotta,
@@ -1040,7 +1040,7 @@ fun ClaudeChatView(
                         onValueChange = { promptInput = it },
                         placeholder = {
                             Text(
-                                text = "Сообщение для ClaudeShell (файлы, скрипты, команды)...",
+                                text = "Сообщение для CodeStudio (файлы, скрипты, команды)...",
                                 style = TextStyle(
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -1148,7 +1148,7 @@ fun ClaudeMessageRow(
             Column(modifier = Modifier.weight(1f)) {
                 // Header (Role label)
                 Text(
-                    text = if (isUser) "Вы" else "ClaudeShell",
+                    text = if (isUser) "Вы" else "CodeStudio",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface

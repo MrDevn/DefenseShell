@@ -373,7 +373,7 @@ fun ClaudeArtifactCard(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF100F0E))
+                                .background(ClaudeTerminalBackground)
                                 .padding(12.dp)
                         ) {
                             Row(

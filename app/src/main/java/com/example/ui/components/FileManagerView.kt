@@ -76,7 +76,7 @@ fun FileManagerView(
         // Storage Permission Alert if needed
         if (!hasStoragePermission) {
             Surface(
-                color = Color(0xFFFFF3E0),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -86,7 +86,7 @@ fun FileManagerView(
                     Icon(
                         imageVector = Icons.Default.WarningAmber,
                         contentDescription = null,
-                        tint = Color(0xFFE65100),
+                        tint = ClaudeDanger,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -95,13 +95,13 @@ fun FileManagerView(
                             text = "Требуется доступ ко всем файлам",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE65100)
+                                color = ClaudeDanger
                             )
                         )
                         Text(
                             text = "Для работы с реальными файлами в Download, Documents и др. разрешите All Files Access в системе.",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF5D4037),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
                             )
                         )
@@ -109,7 +109,7 @@ fun FileManagerView(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = onRequestStoragePermission,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Text("Открыть", fontSize = 12.sp)
@@ -155,7 +155,14 @@ fun FileManagerView(
                 FilterChip(
                     selected = isCurrent,
                     onClick = { onNavigateToDir(folder.folderPath) },
-                    label = { Text("📁 ${folder.displayName}", fontSize = 11.sp) },
+                    label = { Text(folder.displayName, fontSize = 11.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = ClaudeTerracotta,
                         selectedLabelColor = Color.White

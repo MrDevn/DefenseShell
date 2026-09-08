@@ -50,16 +50,16 @@ class FileSystemEngine(private val context: Context) {
     }
 
     /**
-     * Dedicated Agent Home directory: <app-private>/rootfs/home/claudeshell
-     * Shown to the user/agent as the virtual path /home/claudeshell — the real
+     * Dedicated Agent Home directory: <app-private>/rootfs/home/codestudio
+     * Shown to the user/agent as the virtual path /home/codestudio — the real
      * $HOME analog, matching how UserLand exposes /home/userland/.
      */
     val agentHomeDir: File by lazy {
-        File(linuxRootDir, "home/claudeshell")
+        File(linuxRootDir, "home/codestudio")
     }
 
     /** Virtual path the agent/UI should display for $HOME (not a real OS path). */
-    val homeDisplayPath: String = "/home/claudeshell"
+    val homeDisplayPath: String = "/home/codestudio"
 
     /** Virtual mount point under which SAF-granted Android folders are exposed. */
     val androidMountDisplayRoot: String = "/mnt/android"
@@ -85,7 +85,7 @@ class FileSystemEngine(private val context: Context) {
             val readme = File(agentHomeDir, "README.md")
             if (!readme.exists()) {
                 readme.writeText(
-                    """# Домашняя директория ClaudeShell (${'$'}HOME)
+                    """# Домашняя директория CodeStudio (${'$'}HOME)
 Путь: $homeDisplayPath
 
 Это виртуальная домашняя директория агента внутри приватного песочничного
@@ -453,7 +453,7 @@ $androidMountDisplayRoot/<имя_папки>.
 
     /**
      * Resolves a file path string to an absolute File.
-     * ~, $HOME and /home/claudeshell all resolve to agentHomeDir (the private
+     * ~, $HOME and /home/codestudio all resolve to agentHomeDir (the private
      * rootfs home). /mnt/android/<name> and /sdcard/... resolve to real Android
      * storage (the separate, SAF-gated mechanism). Any other absolute path is
      * treated as living inside the virtual Linux root (linuxRootDir), since the

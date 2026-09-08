@@ -68,7 +68,7 @@ fun TerminalView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF131211))
+                .background(ClaudeTerminalBackground)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -82,7 +82,7 @@ fun TerminalView(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "claudeshell @ android",
+                    text = "codestudio @ android",
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
@@ -92,7 +92,7 @@ fun TerminalView(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
-                    color = Color(0xFF262422),
+                    color = Color(0xFF232A33),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
@@ -124,7 +124,7 @@ fun TerminalView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF161514))
+                .background(Color(0xFF14181E))
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -141,7 +141,7 @@ fun TerminalView(
 
             quickCommands.forEach { cmd ->
                 Surface(
-                    color = Color(0xFF252321),
+                    color = Color(0xFF232A33),
                     shape = RoundedCornerShape(6.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
@@ -166,7 +166,7 @@ fun TerminalView(
             }
         }
 
-        HorizontalDivider(color = Color(0xFF252321), thickness = 1.dp)
+        HorizontalDivider(color = Color(0xFF232A33), thickness = 1.dp)
 
         // Output Console Feed
         LazyColumn(
@@ -179,7 +179,7 @@ fun TerminalView(
         ) {
             item {
                 Text(
-                    text = "Welcome to ClaudeShell Linux Sandbox v1.0.0\nType commands below or ask the AI agent in the Chat tab.",
+                    text = "Welcome to CodeStudio Linux Sandbox v1.0.0\nType commands below or ask the AI agent in the Chat tab.",
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
@@ -254,13 +254,13 @@ fun TerminalView(
             }
         }
 
-        HorizontalDivider(color = Color(0xFF252321), thickness = 1.dp)
+        HorizontalDivider(color = Color(0xFF232A33), thickness = 1.dp)
 
         // Terminal Command Input Field
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF131211))
+                .background(ClaudeTerminalBackground)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -303,9 +303,9 @@ fun TerminalView(
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = ClaudeTerracotta,
-                    unfocusedBorderColor = Color(0xFF2D2A26),
-                    focusedContainerColor = Color(0xFF1B1A18),
-                    unfocusedContainerColor = Color(0xFF1B1A18)
+                    unfocusedBorderColor = Color(0xFF2C323C),
+                    focusedContainerColor = Color(0xFF1A1F26),
+                    unfocusedContainerColor = Color(0xFF1A1F26)
                 ),
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(8.dp)

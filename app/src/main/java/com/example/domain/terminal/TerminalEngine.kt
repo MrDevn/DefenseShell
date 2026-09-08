@@ -221,7 +221,7 @@ class TerminalEngine(
                 workingDir = workDir.absolutePath,
                 exitCode = 0,
                 output = """
-ClaudeShell Terminal Commands:
+CodeStudio Terminal Commands:
   ls [-la]              List directory contents
   pwd                   Print current working directory
   cd <dir>              Change working directory

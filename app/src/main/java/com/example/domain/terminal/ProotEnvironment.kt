@@ -33,18 +33,18 @@ import java.io.File
  *            prootBinaryPath,
  *            "-r", linuxRootDir.absolutePath,
  *            "-b", "/dev", "-b", "/proc", "-b", "/sys",
- *            "-w", "/home/claudeshell",
+ *            "-w", "/home/codestudio",
  *            "-0",
  *            "/bin/sh", "-c", cmd
  *        )
- *   3. Inside that proot call, /home/claudeshell, /tmp, /etc etc. become real
+ *   3. Inside that proot call, /home/codestudio, /tmp, /etc etc. become real
  *      paths *from the shell's point of view* — cd/pwd/ls all see a genuine
  *      Linux tree, with its own coreutils/busybox rather than Android's.
  *
  * This sandbox environment has no network access and cannot fetch or verify
  * those binaries, so this class is left as documented scaffolding rather than
  * a working implementation. [FileSystemEngine] already creates the directory
- * layout (linuxRootDir/home/claudeshell, /tmp, /etc, /var/log) this would bind
+ * layout (linuxRootDir/home/codestudio, /tmp, /etc, /var/log) this would bind
  * into.
  */
 class ProotEnvironment(

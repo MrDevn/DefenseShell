@@ -16,7 +16,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("ClaudeShell", appName)
+    assertEquals("CodeStudio", appName)
   }
 
   @Test
@@ -38,7 +38,7 @@ class ExampleRobolectricTest {
     assertEquals(true, fsEngine.isInsideHome("~/test.sh"))
     assertEquals(true, fsEngine.isInsideHome("${fsEngine.homeDisplayPath}/test.sh"))
     // /sdcard is external storage (SAF-gated), it is NOT inside the agent home
-    assertEquals(false, fsEngine.isInsideHome("/sdcard/Defense/ClaudeShell/notes.txt"))
+    assertEquals(false, fsEngine.isInsideHome("/sdcard/Defense/CodeStudio/notes.txt"))
 
     // External path authorization check
     val externalPath = "/sdcard/Defense/Projects"

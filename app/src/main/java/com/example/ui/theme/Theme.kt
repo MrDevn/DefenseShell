@@ -12,12 +12,12 @@ private val DarkColorScheme = darkColorScheme(
   primary = ClaudeTerracottaLight,
   onPrimary = Color.White,
   primaryContainer = ClaudeTerracottaDark,
-  onPrimaryContainer = Color(0xFFFFDBCF),
+  onPrimaryContainer = Color(0xFFDCEBF7),
   secondary = ClaudeTerracottaLight,
   onSecondary = Color.White,
   secondaryContainer = ClaudeSurfaceElevatedDark,
   onSecondaryContainer = ClaudeTextPrimaryDark,
-  tertiary = Color(0xFFD48B38),
+  tertiary = ClaudeWarning,
   background = ClaudeBackgroundDark,
   onBackground = ClaudeTextPrimaryDark,
   surface = ClaudeSurfaceDark,
@@ -25,7 +25,7 @@ private val DarkColorScheme = darkColorScheme(
   surfaceVariant = ClaudeSurfaceElevatedDark,
   onSurfaceVariant = ClaudeTextSecondaryDark,
   outline = ClaudeBorderDark,
-  outlineVariant = Color(0xFF2E2C29)
+  outlineVariant = Color(0xFF262C35)
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -37,7 +37,7 @@ private val LightColorScheme = lightColorScheme(
   onSecondary = Color.White,
   secondaryContainer = ClaudeSurfaceElevatedLight,
   onSecondaryContainer = ClaudeTextPrimaryLight,
-  tertiary = Color(0xFF8B5E3C),
+  tertiary = ClaudeTerracottaDark,
   background = ClaudeBackgroundLight,
   onBackground = ClaudeTextPrimaryLight,
   surface = ClaudeSurfaceLight,
@@ -45,13 +45,13 @@ private val LightColorScheme = lightColorScheme(
   surfaceVariant = ClaudeSurfaceElevatedLight,
   onSurfaceVariant = ClaudeTextSecondaryLight,
   outline = ClaudeBorderLight,
-  outlineVariant = Color(0xFFDCD4C8)
+  outlineVariant = Color(0xFFD8DEE7)
 )
 
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = false, // Preserve our distinctive Claude terracotta aesthetic
+  dynamicColor: Boolean = false, // Preserve the distinctive CodeStudio azure aesthetic
   content: @Composable () -> Unit,
 ) {
   val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme

@@ -27,6 +27,7 @@ import com.example.data.db.entities.FileLogEntity
 import com.example.ui.theme.ClaudeDanger
 import com.example.ui.theme.ClaudeSuccess
 import com.example.ui.theme.ClaudeTerracotta
+import com.example.ui.theme.ClaudeWarning
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -211,13 +212,13 @@ fun CommandLogsView(
                                 if (log.output.isNotEmpty()) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Surface(
-                                        color = Color(0xFF1E1E1E),
+                                        color = Color(0xFF101317),
                                         shape = RoundedCornerShape(6.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
                                             text = log.output,
-                                            color = Color(0xFFE0E0E0),
+                                            color = Color(0xFFD9E0E8),
                                             fontFamily = FontFamily.Monospace,
                                             fontSize = 11.sp,
                                             modifier = Modifier.padding(8.dp)
@@ -296,7 +297,7 @@ fun CommandLogsView(
                                         color = when (fLog.operation) {
                                             "DELETE" -> ClaudeDanger.copy(alpha = 0.15f)
                                             "CREATE", "CREATE_DIR" -> ClaudeSuccess.copy(alpha = 0.15f)
-                                            "RESTORE" -> Color(0xFF2196F3).copy(alpha = 0.15f)
+                                            "RESTORE" -> ClaudeWarning.copy(alpha = 0.15f)
                                             else -> ClaudeTerracotta.copy(alpha = 0.15f)
                                         },
                                         shape = RoundedCornerShape(4.dp)
@@ -308,7 +309,7 @@ fun CommandLogsView(
                                             color = when (fLog.operation) {
                                                 "DELETE" -> ClaudeDanger
                                                 "CREATE", "CREATE_DIR" -> ClaudeSuccess
-                                                "RESTORE" -> Color(0xFF2196F3)
+                                                "RESTORE" -> ClaudeWarning
                                                 else -> ClaudeTerracotta
                                             },
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)

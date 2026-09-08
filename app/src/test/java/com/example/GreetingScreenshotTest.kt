@@ -29,7 +29,7 @@ class GreetingScreenshotTest {
             title = "welcome.sh",
             type = com.example.data.model.ArtifactType.FILE_CREATE,
             targetPath = "welcome.sh",
-            content = "#!/bin/sh\necho 'ClaudeShell Test'",
+            content = "#!/bin/sh\necho 'CodeStudio Test'",
             language = "bash"
           ),
           onExecute = {},

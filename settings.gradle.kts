@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "ClaudeShell"
+rootProject.name = "CodeStudio"
 
 include(":app")

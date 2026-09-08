@@ -162,11 +162,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     conversationId = newId,
                     role = "ASSISTANT",
                     content = """
-Привет! Я ClaudeShell — автономный ИИ-агент с реальным доступом к файловой системе Android и терминалу.
+Привет! Я CodeStudio — автономный ИИ-агент с реальным доступом к файловой системе Android и терминалу.
 
-⚙️ Подключение: нажмите на индикатор подключения вверху — во вкладке **Free 🎁** доступны бесплатные модели (работают сразу, без ключей и настройки), а во вкладке **Мои** можно добавить свой API: `base-url`, `api-key` и `model-id`.
+Подключение: нажмите на индикатор подключения вверху и добавьте свой API — `base-url`, `api-key` и `model-id`.
 
-📁 Доступ к файлам: устройство доступно напрямую в каталоге `${_currentWorkingDir.value}`. Вы можете попросить меня найти, создать, отредактировать или удалить любые файлы, запустить shell-скрипт или автоматизировать задачу.
+Домашняя директория агента: `${_currentWorkingDir.value}`. Вы можете попросить меня найти, создать, отредактировать или удалить любые файлы, запустить shell-скрипт или автоматизировать задачу.
 """.trimIndent(),
                     artifactsJson = "[]"
                 )
@@ -531,7 +531,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     id = UUID.randomUUID().toString(),
                     conversationId = convId,
                     role = MessageRole.SYSTEM.name,
-                    content = "✅ Разрешение на доступ к папке **${granted.displayName}** (`${granted.folderPath}`) успешно получено и сохранено в системе (SAF). Продолжаю выполнение задачи...",
+                    content = "Разрешение на доступ к папке **${granted.displayName}** (`${granted.folderPath}`) получено и сохранено в системе (SAF). Продолжаю выполнение задачи...",
                     artifactsJson = "[]"
                 )
             )
@@ -561,7 +561,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     id = UUID.randomUUID().toString(),
                     conversationId = convId,
                     role = MessageRole.ASSISTANT.name,
-                    content = "❌ Доступ к папке `${targetPath ?: "устройства"}` был отклонен пользователем. Агент не может продолжить работу с этой папкой без системного разрешения (SAF).",
+                    content = "Доступ к папке `${targetPath ?: "устройства"}` был отклонен пользователем. Агент не может продолжить работу с этой папкой без системного разрешения (SAF).",
                     artifactsJson = "[]"
                 )
             )
@@ -771,11 +771,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     conversationId = convId,
                     role = MessageRole.ASSISTANT.name,
                     content = """
-⚠️ **Подключение не настроено**
+**Подключение не настроено**
 
-Самый быстрый способ: нажмите на плашку подключения вверху экрана → вкладка **Free 🎁** → выберите любую бесплатную модель — она активируется сразу, без ключей и настройки.
-
-Или добавьте своё подключение:
+Добавьте и активируйте подключение:
 1. Нажмите на плашку подключения вверху экрана или в меню
 2. Укажите:
    - **provider-id**: Название (например: *My DeepSeek*, *OpenRouter*)
@@ -824,7 +822,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         lower.contains("нужно ли мне продолжить") || lower.contains("хотите, чтобы я продолжил") ||
                         lower.contains("мне продолжить?")
                     if (asksToContinue && iteration < MAX_AGENT_ITERATIONS && !stopRequested) {
-                        insertSystemMessage("⚙️ Агент запросил продолжение — продолжаю выполнение задачи автоматически...")
+                        insertSystemMessage("Агент запросил продолжение — выполняю задачу дальше автоматически.")
                         prompt = "Продолжай выполнение задачи с того места, где остановился. Не спрашивай подтверждений — действуй. Если задача полностью выполнена — подведи итог без артефактов."
                         continue
                     }
@@ -865,7 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             if (iteration >= MAX_AGENT_ITERATIONS && !stopRequested) {
-                insertSystemMessage("⚠️ Достигнут лимит автономных итераций ($MAX_AGENT_ITERATIONS). Цепочка выполнения остановлена — отправьте сообщение, чтобы продолжить.")
+                insertSystemMessage("Достигнут лимит автономных итераций ($MAX_AGENT_ITERATIONS). Цепочка выполнения остановлена — отправьте сообщение, чтобы продолжить.")
             }
         } catch (_: CancellationException) {
             // Остановлено пользователем — частичный ответ уже сохранён в requestModelTurn
@@ -967,7 +965,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val content = if (stopRequested) {
                 stoppedText(lastPartialText)
             } else {
-                "❌ ${e.message ?: "Неизвестная ошибка при запросе к API"}"
+                "Ошибка: ${e.message ?: "неизвестная ошибка при запросе к API"}"
             }
             withContext(NonCancellable) {
                 streamWriteJob?.join()
@@ -988,9 +986,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun stoppedText(partial: String): String {
         val base = partial.trim()
         return if (base.isEmpty()) {
-            "⏹ Генерация остановлена пользователем."
+            "Генерация остановлена пользователем."
         } else {
-            "$base\n\n⏹ _Остановлено пользователем._"
+            "$base\n\n_Остановлено пользователем._"
         }
     }
 
@@ -1016,13 +1014,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun buildExecutionSummary(artifacts: List<Artifact>): String {
-        val sb = StringBuilder("⚙️ Результаты выполнения действий агента:\n")
+        val sb = StringBuilder("Результаты выполнения действий:\n")
         for (a in artifacts) {
             val statusLabel = when (a.status) {
-                ArtifactStatus.SUCCESS -> "✅ УСПЕХ"
-                ArtifactStatus.FAILED -> "❌ ОШИБКА"
-                ArtifactStatus.REJECTED -> "⛔ ОТКЛОНЕНО ПОЛЬЗОВАТЕЛЕМ"
-                else -> "⏸ НЕ ВЫПОЛНЕНО"
+                ArtifactStatus.SUCCESS -> "УСПЕХ"
+                ArtifactStatus.FAILED -> "ОШИБКА"
+                ArtifactStatus.REJECTED -> "ОТКЛОНЕНО ПОЛЬЗОВАТЕЛЕМ"
+                else -> "НЕ ВЫПОЛНЕНО"
             }
             sb.append("- ${a.title}: $statusLabel")
             a.exitCode?.let { sb.append(" (код выхода: $it)") }

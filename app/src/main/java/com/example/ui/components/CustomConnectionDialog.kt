@@ -24,8 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomConnection
 import com.example.data.model.FreePresets
+import com.example.ui.theme.ClaudeDanger
+import com.example.ui.theme.ClaudeSuccess
 import com.example.ui.theme.ClaudeTerracotta
 import kotlinx.coroutines.launch
+
+// Временно скрываем вкладку Free — только пользовательские подключения.
+// Вернуть вкладку: поставить true.
+private const val SHOW_FREE_TAB = false
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,10 +47,10 @@ fun CustomConnectionDialog(
     val coroutineScope = rememberCoroutineScope()
 
     // Вкладки списка: 0 = Мои подключения, 1 = Free (бесплатные модели для всех)
-    var selectedTab by remember { mutableStateOf(if (connections.isEmpty()) 1 else 0) }
+    var selectedTab by remember { mutableStateOf(if (SHOW_FREE_TAB && connections.isEmpty()) 1 else 0) }
 
     // Screen mode: 0 = Connection list, 1 = Add / Edit Connection Form
-    var isEditingForm by remember { mutableStateOf(false) }
+    var isEditingForm by remember { mutableStateOf(connections.isEmpty() && !SHOW_FREE_TAB) }
     var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
     // Form fields
@@ -128,18 +134,20 @@ fun CustomConnectionDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (!isEditingForm) {
-                    // Вкладки: Мои подключения / Free
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ConnectionTabPill(label = "Мои", selected = selectedTab == 0) { selectedTab = 0 }
-                        ConnectionTabPill(label = "Free 🎁", selected = selectedTab == 1) { selectedTab = 1 }
+                    // Вкладки: Мои подключения / Free (Free временно скрыта)
+                    if (SHOW_FREE_TAB) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ConnectionTabPill(label = "Мои", selected = selectedTab == 0) { selectedTab = 0 }
+                            ConnectionTabPill(label = "Free", selected = selectedTab == 1) { selectedTab = 1 }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (selectedTab == 1) {
+                    if (SHOW_FREE_TAB && selectedTab == 1) {
                         // Вкладка Free: встроенные бесплатные модели, доступны всем без настройки
                         LazyColumn(
                             modifier = Modifier
@@ -215,7 +223,7 @@ fun CustomConnectionDialog(
                                         } else {
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = Color(0xFF4E9E67),
+                                                color = ClaudeSuccess,
                                                 contentColor = Color.White
                                             ) {
                                                 Text(
@@ -240,7 +248,11 @@ fun CustomConnectionDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Нет сохраненных подключений.\nДобавьте своё API или выберите бесплатную модель во вкладке Free 🎁",
+                                    text = if (SHOW_FREE_TAB) {
+                                        "Нет сохраненных подключений.\nДобавьте своё API или выберите бесплатную модель во вкладке Free"
+                                    } else {
+                                        "Нет сохраненных подключений.\nСоздайте первое подключение с вашим API."
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -458,7 +470,7 @@ fun CustomConnectionDialog(
                                     value = customHeadersInput,
                                     onValueChange = { customHeadersInput = it },
                                     label = { Text("Кастомные HTTP-заголовки (JSON)") },
-                                    placeholder = { Text("{\"HTTP-Referer\": \"https://app\", \"X-Title\": \"ClaudeShell\"}") },
+                                    placeholder = { Text("{\"HTTP-Referer\": \"https://app\", \"X-Title\": \"CodeStudio\"}") },
                                     minLines = 2,
                                     maxLines = 4,
                                     modifier = Modifier.fillMaxWidth()
@@ -526,13 +538,13 @@ fun CustomConnectionDialog(
                             item {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (testIsSuccess) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                    color = if (testIsSuccess) ClaudeSuccess.copy(alpha = 0.12f) else ClaudeDanger.copy(alpha = 0.12f),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
                                         text = testResultText!!,
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = if (testIsSuccess) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                            color = if (testIsSuccess) ClaudeSuccess else ClaudeDanger
                                         ),
                                         modifier = Modifier.padding(10.dp)
                                     )
