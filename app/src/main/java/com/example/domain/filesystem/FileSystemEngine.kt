@@ -473,9 +473,17 @@ $androidMountDisplayRoot/<имя_папки>.
                 primaryStorageDir
             }
             cleanPath.startsWith("/") -> {
-                // Any other absolute path (/etc, /tmp, /usr, ...) lives inside the
-                // app-private virtual root, not the real Android filesystem root.
-                File(linuxRootDir, cleanPath.removePrefix("/"))
+                // Real sandbox paths (already under the app's private data dir,
+                // e.g. agentHomeDir.absolutePath) must be used as-is, otherwise
+                // they would get doubly nested under linuxRootDir.
+                val sandboxRoots = listOf(context.filesDir.absolutePath, context.dataDir.absolutePath)
+                if (sandboxRoots.any { cleanPath == it || cleanPath.startsWith("$it/") }) {
+                    File(cleanPath)
+                } else {
+                    // Any other absolute path (/etc, /tmp, /usr, ...) lives inside the
+                    // app-private virtual root, not the real Android filesystem root.
+                    File(linuxRootDir, cleanPath.removePrefix("/"))
+                }
             }
             else -> {
                 File(base, cleanPath)

@@ -36,7 +36,9 @@ class ExampleRobolectricTest {
     assertEquals(true, fsEngine.agentHomeDir.exists())
     assertEquals(true, fsEngine.isInsideHome(fsEngine.agentHomeDir.absolutePath))
     assertEquals(true, fsEngine.isInsideHome("~/test.sh"))
-    assertEquals(true, fsEngine.isInsideHome("/sdcard/Defense/ClaudeShell/notes.txt"))
+    assertEquals(true, fsEngine.isInsideHome("${fsEngine.homeDisplayPath}/test.sh"))
+    // /sdcard is external storage (SAF-gated), it is NOT inside the agent home
+    assertEquals(false, fsEngine.isInsideHome("/sdcard/Defense/ClaudeShell/notes.txt"))
 
     // External path authorization check
     val externalPath = "/sdcard/Defense/Projects"
