@@ -801,7 +801,7 @@ fun ClaudeChatView(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Пользовательское подключение не настроено",
+                            text = "Подключение не настроено",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFE65100),
@@ -809,7 +809,7 @@ fun ClaudeChatView(
                             )
                         )
                         Text(
-                            text = "Нажмите для ввода base-url, api-key и model-id",
+                            text = "Вкладка Free 🎁 — бесплатные модели без настройки, или укажите свой API",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color(0xFF5D4037),
                                 fontSize = 11.sp

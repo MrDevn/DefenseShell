@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomConnection
+import com.example.data.model.FreePresets
 import com.example.ui.theme.ClaudeTerracotta
 import kotlinx.coroutines.launch
 
@@ -39,8 +40,11 @@ fun CustomConnectionDialog(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
+    // Вкладки списка: 0 = Мои подключения, 1 = Free (бесплатные модели для всех)
+    var selectedTab by remember { mutableStateOf(if (connections.isEmpty()) 1 else 0) }
+
     // Screen mode: 0 = Connection list, 1 = Add / Edit Connection Form
-    var isEditingForm by remember { mutableStateOf(connections.isEmpty()) }
+    var isEditingForm by remember { mutableStateOf(false) }
     var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
     // Form fields
@@ -96,18 +100,24 @@ fun CustomConnectionDialog(
                         Text(
                             text = if (isEditingForm) {
                                 if (editingConnectionId != null) "Редактирование подключения" else "Новое подключение"
+                            } else if (selectedTab == 1) {
+                                "Бесплатные модели (Free)"
                             } else {
                                 "Пользовательские подключения"
                             },
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "Тип подключения: Пользовательский (Custom)",
+                            text = if (!isEditingForm && selectedTab == 1) {
+                                "Доступны всем • работают сразу, без ключей"
+                            } else {
+                                "Тип подключения: Пользовательский (Custom)"
+                            },
                             style = MaterialTheme.typography.bodySmall.copy(color = ClaudeTerracotta)
                         )
                     }
 
-                    if (isEditingForm && connections.isNotEmpty()) {
+                    if (isEditingForm) {
                         IconButton(onClick = { isEditingForm = false }) {
                             Icon(Icons.Default.Close, contentDescription = "Назад к списку")
                         }
@@ -118,30 +128,35 @@ fun CustomConnectionDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (!isEditingForm) {
-                    // List of existing Custom connections
-                    if (connections.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Нет сохраненных подключений.\nСоздайте первое подключение с вашим API.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
+                    // Вкладки: Мои подключения / Free
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ConnectionTabPill(label = "Мои", selected = selectedTab == 0) { selectedTab = 0 }
+                        ConnectionTabPill(label = "Free 🎁", selected = selectedTab == 1) { selectedTab = 1 }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (selectedTab == 1) {
+                        // Вкладка Free: встроенные бесплатные модели, доступны всем без настройки
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 380.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(connections) { conn ->
-                                val isActive = conn.id == activeConnection?.id
-
+                            item {
+                                Text(
+                                    text = "Эти модели работают сразу и бесплатно для всех — нажмите на модель, чтобы активировать её.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                            items(FreePresets.freeModelIds) { modelId ->
+                                val isActive = activeConnection?.id == FreePresets.connectionId(modelId)
                                 val shape = RoundedCornerShape(12.dp)
                                 Box(
                                     modifier = Modifier
@@ -153,7 +168,10 @@ fun CustomConnectionDialog(
                                             shape = shape
                                         )
                                         .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
-                                        .clickable { onSelectConnection(conn) }
+                                        .clickable {
+                                            onSaveConnection(FreePresets.toConnection(modelId))
+                                            onDismiss()
+                                        }
                                         .padding(12.dp)
                                 ) {
                                     Row(
@@ -161,41 +179,16 @@ fun CustomConnectionDialog(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = conn.providerId.ifBlank { "Без названия" },
-                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                                if (isActive) {
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Surface(
-                                                        shape = RoundedCornerShape(4.dp),
-                                                        color = ClaudeTerracotta,
-                                                        contentColor = Color.White
-                                                    ) {
-                                                        Text(
-                                                            text = "АКТИВНО",
-                                                            fontSize = 9.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(2.dp))
-
                                             Text(
-                                                text = "Модель: ${conn.modelId}",
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                text = modelId,
+                                                style = MaterialTheme.typography.titleSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace
                                                 )
                                             )
-
+                                            Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                text = conn.baseUrl,
+                                                text = "Бесплатно • без настройки и ключей",
                                                 style = MaterialTheme.typography.bodySmall.copy(
                                                     fontSize = 10.sp,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -204,27 +197,32 @@ fun CustomConnectionDialog(
                                             )
                                         }
 
-                                        Row {
-                                            IconButton(
-                                                onClick = { populateFormForEdit(conn) },
-                                                modifier = Modifier.size(36.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        if (isActive) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = ClaudeTerracotta,
+                                                contentColor = Color.White
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Edit,
-                                                    contentDescription = "Редактировать",
-                                                    modifier = Modifier.size(18.dp)
+                                                Text(
+                                                    text = "АКТИВНО",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                                 )
                                             }
-
-                                            IconButton(
-                                                onClick = { onDeleteConnection(conn.id) },
-                                                modifier = Modifier.size(36.dp)
+                                        } else {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = Color(0xFF4E9E67),
+                                                contentColor = Color.White
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.DeleteOutline,
-                                                    contentDescription = "Удалить",
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(18.dp)
+                                                Text(
+                                                    text = "FREE",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                                 )
                                             }
                                         }
@@ -232,18 +230,134 @@ fun CustomConnectionDialog(
                                 }
                             }
                         }
-                    }
+                    } else {
+                        // Вкладка «Мои»: list of existing Custom connections
+                        if (connections.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Нет сохраненных подключений.\nДобавьте своё API или выберите бесплатную модель во вкладке Free 🎁",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 380.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(connections) { conn ->
+                                    val isActive = conn.id == activeConnection?.id
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                                    val shape = RoundedCornerShape(12.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(shape)
+                                            .border(
+                                                width = if (isActive) 1.5.dp else 1.dp,
+                                                color = if (isActive) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                                shape = shape
+                                            )
+                                            .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
+                                            .clickable { onSelectConnection(conn) }
+                                            .padding(12.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = conn.providerId.ifBlank { "Без названия" },
+                                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                                    )
+                                                    if (isActive) {
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Surface(
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            color = ClaudeTerracotta,
+                                                            contentColor = Color.White
+                                                        ) {
+                                                            Text(
+                                                                text = "АКТИВНО",
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
 
-                    Button(
-                        onClick = { populateFormForEdit(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Добавить подключение")
+                                                Spacer(modifier = Modifier.height(2.dp))
+
+                                                Text(
+                                                    text = "Модель: ${conn.modelId}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                )
+
+                                                Text(
+                                                    text = conn.baseUrl,
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 10.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                                    ),
+                                                    maxLines = 1
+                                                )
+                                            }
+
+                                            Row {
+                                                IconButton(
+                                                    onClick = { populateFormForEdit(conn) },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Edit,
+                                                        contentDescription = "Редактировать",
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+
+                                                IconButton(
+                                                    onClick = { onDeleteConnection(conn.id) },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.DeleteOutline,
+                                                        contentDescription = "Удалить",
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { populateFormForEdit(null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Добавить подключение")
+                        }
                     }
                 } else {
                     // Form for Custom Connection
@@ -432,13 +546,11 @@ fun CustomConnectionDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (connections.isNotEmpty()) {
-                                    OutlinedButton(
-                                        onClick = { isEditingForm = false },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Отмена")
-                                    }
+                                OutlinedButton(
+                                    onClick = { isEditingForm = false },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Отмена")
                                 }
 
                                 Button(
@@ -483,4 +595,29 @@ fun CustomConnectionDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ConnectionTabPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) ClaudeTerracotta else MaterialTheme.colorScheme.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        ),
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+        )
+    }
 }
