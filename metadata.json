@@ -1,0 +1,6 @@
+{
+  "name": "ClaudeShell",
+  "description": "Minimalist multi-model AI agent with device filesystem access, sandbox terminal, and Claude-style artifact cards",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
