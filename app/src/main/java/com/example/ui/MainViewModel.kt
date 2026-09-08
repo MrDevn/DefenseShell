@@ -24,6 +24,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -502,9 +503,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onFolderPermissionGranted(uri: Uri, targetPath: String?) {
         viewModelScope.launch(Dispatchers.IO) {
-            val granted = fileSystemEngine.registerPersistableFolderUri(uri, targetPath)
-            grantedFolderDao.insertGrantedFolder(granted)
+            // Закрываем диалог запроса СРАЗУ, чтобы он не «залипал» при любых сбоях ниже
             _pendingFolderPermission.value = null
+
+            val granted = fileSystemEngine.registerPersistableFolderUri(uri, targetPath)
+            try {
+                grantedFolderDao.insertGrantedFolder(granted)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // Ждём, пока список выданных папок реально обновится (Room Flow асинхронный),
+            // иначе автовыполнение артефактов снова запросит то же самое разрешение
+            withTimeoutOrNull(3000) {
+                grantedFolders.first { list -> list.any { it.id == granted.id } }
+            }
 
             val convId = _activeConversationId.value
             chatDao.insertMessage(
@@ -519,8 +532,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // Auto-execute pending artifacts if in EXTRA mode or if previously blocked
             val msgs = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
-            val lastAssistantMsg = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.artifacts.isNotEmpty() }
-            if (lastAssistantMsg != null) {
+            val lastAssistantMsg = msgs.lastOrNull { it.role == MessageRole.ASSISTANT }
+            if (lastAssistantMsg != null && lastAssistantMsg.artifacts.isNotEmpty()) {
                 for (artifact in lastAssistantMsg.artifacts) {
                     if (artifact.status == ArtifactStatus.IDLE && artifact.isAgentExecutable()) {
                         if (_operationMode.value == AgentOperationMode.EXTRA || !artifact.isDangerous) {
@@ -1039,8 +1052,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (convId.isEmpty()) return
 
         val messages = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
-        val lastAssistant = messages.lastOrNull { it.role == MessageRole.ASSISTANT && it.artifacts.isNotEmpty() } ?: return
+        // Берём именно ПОСЛЕДНЕЕ сообщение ассистента: если после артефактов уже был
+        // итоговый текстовый ответ — цепочка завершена и перезапускать её не нужно.
+        val lastAssistant = messages.lastOrNull { it.role == MessageRole.ASSISTANT } ?: return
         val arts = lastAssistant.artifacts
+        if (arts.isEmpty()) return
 
         val stillPending = arts.any {
             it.status == ArtifactStatus.IDLE ||

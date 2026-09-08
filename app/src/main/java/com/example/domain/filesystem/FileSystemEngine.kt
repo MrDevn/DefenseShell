@@ -130,18 +130,28 @@ $androidMountDisplayRoot/<имя_папки>.
      */
     fun isFolderAuthorized(path: String, grantedFolders: List<GrantedFolderEntity>): Boolean {
         if (isInsideHome(path)) return true
+        if (grantedFolders.isEmpty()) return false
         return try {
-            val targetFile = resolvePath(path).canonicalFile
+            val targetResolved = resolvePath(path)
+            val targetAbs = targetResolved.absolutePath
+            val targetCanon = targetResolved.canonicalFile.absolutePath
             for (granted in grantedFolders) {
-                val grantedFile = resolvePath(granted.folderPath).canonicalFile
-                if (targetFile.absolutePath.startsWith(grantedFile.absolutePath)) {
-                    return true
-                }
+                val grantedResolved = resolvePath(granted.folderPath)
+                // Сравнение с границей пути, чтобы /sdcard/DefenseFoo не совпал с /sdcard/Defense
+                if (isSameOrInside(targetAbs, grantedResolved.absolutePath)) return true
+                // Каноническая форма: /sdcard — симлинк на /data/media, приводим обе стороны к одному виду
+                if (isSameOrInside(targetCanon, grantedResolved.canonicalFile.absolutePath)) return true
             }
             false
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun isSameOrInside(target: String, root: String): Boolean {
+        if (root.isEmpty()) return false
+        val rootWithSep = if (root.endsWith("/")) root else "$root/"
+        return target == root || target.startsWith(rootWithSep)
     }
 
     /**
@@ -473,11 +483,18 @@ $androidMountDisplayRoot/<имя_папки>.
                 primaryStorageDir
             }
             cleanPath.startsWith("/") -> {
-                // Real sandbox paths (already under the app's private data dir,
-                // e.g. agentHomeDir.absolutePath) must be used as-is, otherwise
-                // they would get doubly nested under linuxRootDir.
-                val sandboxRoots = listOf(context.filesDir.absolutePath, context.dataDir.absolutePath)
-                if (sandboxRoots.any { cleanPath == it || cleanPath.startsWith("$it/") }) {
+                // Уже реальные пути должны возвращаться как есть, иначе они дважды
+                // укореняются под linuxRootDir и перестают совпадать друг с другом:
+                // - приватная песочница приложения (filesDir/dataDir, например agentHomeDir.absolutePath)
+                // - корень основного хранилища (/storage/emulated/0/...): именно в таком виде
+                //   сохраняются пути SAF-разрешений (GrantedFolderEntity.folderPath), и они
+                //   должны резолвиться туда же, куда пути вида /sdcard/...
+                val realRoots = listOf(
+                    context.filesDir.absolutePath,
+                    context.dataDir.absolutePath,
+                    primaryStorageDir.absolutePath
+                )
+                if (realRoots.any { cleanPath == it || cleanPath.startsWith("$it/") }) {
                     File(cleanPath)
                 } else {
                     // Any other absolute path (/etc, /tmp, /usr, ...) lives inside the
