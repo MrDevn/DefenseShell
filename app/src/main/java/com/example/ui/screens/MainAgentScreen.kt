@@ -30,8 +30,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -82,6 +84,8 @@ fun MainAgentScreen(
     val recentFileLogs by viewModel.recentFileLogs.collectAsStateWithLifecycle()
     val pendingDanger by viewModel.pendingDangerousArtifact.collectAsStateWithLifecycle()
     val activeArtifact by viewModel.activeArtifact.collectAsStateWithLifecycle()
+    val agentStage by viewModel.agentStage.collectAsStateWithLifecycle()
+    val thinkingText by viewModel.thinkingText.collectAsStateWithLifecycle()
 
     val pendingFolderPermission by viewModel.pendingFolderPermission.collectAsStateWithLifecycle()
     val operationMode by viewModel.operationMode.collectAsStateWithLifecycle()
@@ -605,9 +609,12 @@ fun MainAgentScreen(
                             isGenerating = isGenerating,
                             activeConnection = activeConnection,
                             operationMode = operationMode,
+                            agentStage = agentStage,
+                            thinkingText = thinkingText,
                             onOpenModeSelection = { showModeSelectionDialog = true },
                             onOpenConnectionSettings = { showCustomConnectionDialog = true },
                             onSendMessage = { prompt -> viewModel.sendMessage(prompt) },
+                            onStopGeneration = { viewModel.stopGeneration() },
                             onExecuteArtifact = { artifact -> viewModel.executeArtifact(artifact) },
                             onRejectArtifact = { artifact -> viewModel.rejectArtifact(artifact) },
                             onSaveArtifactContent = { artifact, content -> viewModel.saveArtifactContent(artifact, content) },
@@ -737,6 +744,9 @@ fun ClaudeChatView(
     onDangerConfirmRequest: (Artifact) -> Unit,
     modifier: Modifier = Modifier,
     operationMode: AgentOperationMode = AgentOperationMode.SAFETY,
+    agentStage: AgentStage = AgentStage.IDLE,
+    thinkingText: String = "",
+    onStopGeneration: () -> Unit = {},
     onOpenModeSelection: () -> Unit = {},
     onRejectArtifact: (Artifact) -> Unit = {}
 ) {
@@ -835,30 +845,81 @@ fun ClaudeChatView(
 
                 if (isGenerating) {
                     item {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(ClaudeTerracotta.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = ClaudeTerracotta
+                        Column(modifier = Modifier.padding(start = 4.dp, top = 8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(ClaudeTerracotta.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (agentStage == AgentStage.THINKING) {
+                                        Icon(
+                                            imageVector = Icons.Default.Psychology,
+                                            contentDescription = null,
+                                            tint = ClaudeTerracotta,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = ClaudeTerracotta
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = when (agentStage) {
+                                        AgentStage.CONNECTING -> "Подключение к API..."
+                                        AgentStage.THINKING -> "🧠 Thinking — агент думает над задачей..."
+                                        AgentStage.RESPONDING -> "Генерация ответа..."
+                                        AgentStage.EXECUTING -> "⚙️ Выполнение действий агента..."
+                                        AgentStage.IDLE -> "Отправка запроса к API и генерация ответа..."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Отправка запроса к API и генерация ответа...",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
+
+                            // Панель мыслей агента (стрим reasoning_content модели)
+                            if (agentStage == AgentStage.THINKING && thinkingText.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        ClaudeTerracotta.copy(alpha = 0.25f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(
+                                            text = "💭 Мысли агента",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = ClaudeTerracotta,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = thinkingText.takeLast(900),
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontStyle = FontStyle.Italic,
+                                                fontSize = 11.sp,
+                                                lineHeight = 16.sp
+                                            ),
+                                            maxLines = 10,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1003,23 +1064,31 @@ fun ClaudeChatView(
 
                     IconButton(
                         onClick = {
-                            if (promptInput.isNotBlank() && !isGenerating) {
+                            if (isGenerating) {
+                                onStopGeneration()
+                            } else if (promptInput.isNotBlank()) {
                                 onSendMessage(promptInput)
                                 promptInput = ""
                             }
                         },
-                        enabled = promptInput.isNotBlank() && !isGenerating,
+                        enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(if (promptInput.isNotBlank() && !isGenerating) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                            .background(
+                                when {
+                                    isGenerating -> ClaudeDanger
+                                    promptInput.isNotBlank() -> ClaudeTerracotta
+                                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                }
+                            )
                             .testTag("send_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Отправить",
+                            imageVector = if (isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(if (isGenerating) 18.dp else 16.dp)
                         )
                     }
                 }

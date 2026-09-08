@@ -9,7 +9,10 @@ import com.example.data.model.ChatMessage
 import com.example.data.model.CustomConnection
 import com.example.data.model.MessageRole
 import com.example.domain.filesystem.FileSystemEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -41,6 +44,10 @@ class AiAgentService(
     /**
      * Executes a real HTTP request to the user's Custom connection.
      * Streams the text output chunk-by-chunk via [onPartialText] if streaming is supported.
+     * Model reasoning ("Thinking") is streamed separately via [onPartialReasoning] when the
+     * provider supplies it (DeepSeek reasoning_content, OpenRouter/OpenAI reasoning, Ollama).
+     * The in-flight HTTP call is cancelled automatically when the calling coroutine is cancelled
+     * (user pressed Stop).
      * NO MOCK RESPONSES, NO HARDCODED PRESETS.
      */
     suspend fun executeCustomPrompt(
@@ -50,7 +57,8 @@ class AiAgentService(
         conversationHistory: List<ChatMessage>,
         operationMode: AgentOperationMode = AgentOperationMode.SAFETY,
         grantedFolders: List<GrantedFolderEntity> = emptyList(),
-        onPartialText: ((String) -> Unit)? = null
+        onPartialText: ((String) -> Unit)? = null,
+        onPartialReasoning: ((String) -> Unit)? = null
     ): AgentExecutionResult = withContext(Dispatchers.IO) {
         if (connection.baseUrl.isBlank()) {
             throw IllegalArgumentException("Ошибка: не указан base-url для подключения '${connection.providerId}'. Укажите корректный адрес API.")
@@ -133,10 +141,15 @@ class AiAgentService(
         val request = requestBuilder.build()
 
         val fullResponseText = StringBuilder()
+        val fullReasoningText = StringBuilder()
         var isSseStream = false
 
         try {
-            val response = httpClient.newCall(request).execute()
+            val call = httpClient.newCall(request)
+            // Отмена HTTP-запроса при остановке генерации пользователем
+            coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
+
+            val response = call.execute()
 
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string() ?: "(пустой ответ)"
@@ -154,6 +167,7 @@ class AiAgentService(
             if (isSseStream) {
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
+                    ensureActive()
                     val currentLine = line?.trim() ?: continue
                     if (currentLine.isEmpty() || currentLine.startsWith(":")) continue // Ping / comment
 
@@ -165,6 +179,11 @@ class AiAgentService(
 
                         try {
                             val chunkJson = JSONObject(dataContent)
+                            val deltaReasoning = extractReasoningFromChunk(chunkJson)
+                            if (deltaReasoning.isNotEmpty()) {
+                                fullReasoningText.append(deltaReasoning)
+                                onPartialReasoning?.invoke(fullReasoningText.toString())
+                            }
                             val deltaContent = extractDeltaFromChunk(chunkJson)
                             if (deltaContent.isNotEmpty()) {
                                 fullResponseText.append(deltaContent)
@@ -178,12 +197,24 @@ class AiAgentService(
             } else {
                 // Non-streaming direct response
                 val rawBody = reader.readText()
+                try {
+                    val reasoning = extractReasoningFromChunk(JSONObject(rawBody))
+                    if (reasoning.isNotEmpty()) {
+                        fullReasoningText.append(reasoning)
+                        onPartialReasoning?.invoke(fullReasoningText.toString())
+                    }
+                } catch (_: Exception) {}
                 val parsedContent = extractContentFromNonStreaming(rawBody)
                 fullResponseText.append(parsedContent)
                 onPartialText?.invoke(fullResponseText.toString())
             }
 
         } catch (e: Exception) {
+            // Если корутина отменена (пользователь нажал «Стоп») — пробрасываем отмену, а не сетевую ошибку
+            ensureActive()
+            if (e is CancellationException) {
+                throw e
+            }
             if (e is IllegalStateException || e is IllegalArgumentException) {
                 throw e
             }
@@ -297,6 +328,32 @@ class AiAgentService(
         return ""
     }
 
+    /**
+     * Извлекает "мысли" модели (reasoning / thinking) из чанка стрима или полного ответа.
+     * Поддерживаемые форматы: DeepSeek (delta.reasoning_content), OpenRouter/OpenAI
+     * (delta.reasoning), Ollama (message.reasoning_content / message.reasoning).
+     */
+    private fun extractReasoningFromChunk(json: JSONObject): String {
+        val choices = json.optJSONArray("choices")
+        if (choices != null && choices.length() > 0) {
+            val choice = choices.getJSONObject(0)
+            for (key in listOf("delta", "message")) {
+                val part = choice.optJSONObject(key) ?: continue
+                if (part.has("reasoning_content")) return part.optString("reasoning_content", "")
+                if (part.has("reasoning")) return part.optString("reasoning", "")
+            }
+            if (choice.has("reasoning")) return choice.optString("reasoning", "")
+        }
+
+        val message = json.optJSONObject("message")
+        if (message != null) {
+            if (message.has("reasoning_content")) return message.optString("reasoning_content", "")
+            if (message.has("reasoning")) return message.optString("reasoning", "")
+        }
+
+        return ""
+    }
+
     private fun extractContentFromNonStreaming(rawBody: String): String {
         return try {
             val json = JSONObject(rawBody)
@@ -381,6 +438,12 @@ class AiAgentService(
 Ты — ClaudeShell, автономный ИИ-агент с реальным доступом к файловой системе Android устройства и терминалу.
 
 $modeInstructions
+
+ПРАВИЛО НЕПРЕРЫВНОЙ РАБОТЫ:
+Не останавливайся на полпути и НИКОГДА не спрашивай «продолжить?» — действуй сам. Выполняй задачу от начала до конца.
+После выполнения твоих действий приложение автоматически пришлёт тебе их результаты (вывод команд, статусы файлов) отдельным системным сообщением — проанализируй их и продолжай работу, пока задача не будет полностью выполнена.
+Если действие завершилось ошибкой — изучи вывод, исправь подход и попробуй снова другим способом.
+Когда задача полностью выполнена — подведи краткий итог и НЕ генерируй новые артефакты.
 
 ДОМАШНЯЯ ДИРЕКТОРИЯ АГЕНТА (${'$'}HOME / ~):
 $homeDisplay (реальный путь: $homeDir)

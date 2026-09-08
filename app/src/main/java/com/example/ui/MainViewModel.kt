@@ -13,12 +13,17 @@ import com.example.data.db.entities.FileLogEntity
 import com.example.data.db.entities.GrantedFolderEntity
 import com.example.data.db.entities.MessageEntity
 import com.example.data.model.*
+import com.example.domain.ai.AgentExecutionResult
 import com.example.domain.ai.AiAgentService
 import com.example.domain.filesystem.FileSystemEngine
 import com.example.domain.terminal.TerminalEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -88,6 +93,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Execution & Safety
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
+    // Этапы мышления агента: Thinking → Responding → Executing
+    private val _agentStage = MutableStateFlow(AgentStage.IDLE)
+    val agentStage: StateFlow<AgentStage> = _agentStage.asStateFlow()
+
+    private val _thinkingText = MutableStateFlow("")
+    val thinkingText: StateFlow<String> = _thinkingText.asStateFlow()
+
+    // Текущая джоба генерации (для кнопки «Стоп»)
+    private var generationJob: Job? = null
+
+    @Volatile
+    private var stopRequested = false
 
     private val _pendingDangerousArtifact = MutableStateFlow<Artifact?>(null)
     val pendingDangerousArtifact: StateFlow<Artifact?> = _pendingDangerousArtifact.asStateFlow()
@@ -500,16 +518,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             // Auto-execute pending artifacts if in EXTRA mode or if previously blocked
-            val msgs = currentMessages.value
+            val msgs = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
             val lastAssistantMsg = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.artifacts.isNotEmpty() }
             if (lastAssistantMsg != null) {
                 for (artifact in lastAssistantMsg.artifacts) {
-                    if (artifact.isExecutable() && artifact.status == ArtifactStatus.IDLE) {
+                    if (artifact.status == ArtifactStatus.IDLE && artifact.isAgentExecutable()) {
                         if (_operationMode.value == AgentOperationMode.EXTRA || !artifact.isDangerous) {
-                            executeArtifact(artifact)
+                            executeArtifactInternal(artifact)
+                            if (_pendingFolderPermission.value != null) break
                         }
                     }
                 }
+                // Возобновляем цепочку агента после выполнения разблокированных действий
+                maybeContinueAgentChain()
             }
         }
     }
@@ -537,14 +558,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun rejectArtifact(artifact: Artifact) {
-        updateArtifactInCurrentMessages(
-            artifact.copy(
-                status = ArtifactStatus.FAILED,
-                executionOutput = "Действие отклонено пользователем (Режим Safety)."
+        viewModelScope.launch {
+            updateArtifactSuspend(
+                artifact.copy(
+                    status = ArtifactStatus.FAILED,
+                    executionOutput = "Действие отклонено пользователем (Режим Safety)."
+                )
             )
-        )
-        if (_pendingDangerousArtifact.value?.id == artifact.id) {
-            _pendingDangerousArtifact.value = null
+            if (_pendingDangerousArtifact.value?.id == artifact.id) {
+                _pendingDangerousArtifact.value = null
+            }
+            maybeContinueAgentChain()
         }
     }
 
@@ -564,86 +588,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun executeArtifact(artifact: Artifact) {
         viewModelScope.launch {
-            // Check folder authorization before executing
-            val targetPath = artifact.targetPath
-            if (targetPath != null && !fileSystemEngine.isFolderAuthorized(targetPath, grantedFolders.value)) {
-                _pendingFolderPermission.value = fileSystemEngine.extractRequiredFolder(targetPath)
-                return@launch
-            }
+            executeArtifactInternal(artifact)
+            // После выполнения — автоматически продолжаем цепочку агента, если все артефакты обработаны
+            maybeContinueAgentChain()
+        }
+    }
 
-            when (artifact.type) {
-                ArtifactType.TERMINAL_COMMAND -> {
-                    val cmdToRun = artifact.command ?: artifact.content
+    private suspend fun executeArtifactInternal(artifact: Artifact): Artifact {
+        // Check folder authorization before executing
+        val targetPath = artifact.targetPath
+        if (targetPath != null && !fileSystemEngine.isFolderAuthorized(targetPath, grantedFolders.value)) {
+            _pendingFolderPermission.value = fileSystemEngine.extractRequiredFolder(targetPath)
+            return artifact
+        }
 
-                    // If command references an unauthorized path, trigger SAF
-                    val extractedPath = extractPathFromCommand(cmdToRun)
-                    if (extractedPath != null && !fileSystemEngine.isFolderAuthorized(extractedPath, grantedFolders.value)) {
-                        _pendingFolderPermission.value = fileSystemEngine.extractRequiredFolder(extractedPath)
-                        return@launch
-                    }
+        return when (artifact.type) {
+            ArtifactType.TERMINAL_COMMAND, ArtifactType.CODE_SNIPPET -> {
+                val cmdToRun = artifact.command
+                    ?: if (artifact.type == ArtifactType.TERMINAL_COMMAND) artifact.content else null
+                if (cmdToRun.isNullOrBlank()) return artifact
 
-                    val log = terminalEngine.executeCommand(
-                        command = cmdToRun,
-                        workingDir = _currentWorkingDir.value,
-                        source = "AGENT"
-                    )
-
-                    commandLogDao.insertLog(
-                        CommandLogEntity(
-                            command = log.command,
-                            workingDir = log.workingDir,
-                            exitCode = log.exitCode,
-                            output = log.output,
-                            errorOutput = log.errorOutput,
-                            durationMs = log.durationMs,
-                            source = log.source
-                        )
-                    )
-
-                    updateArtifactInCurrentMessages(
-                        artifact.copy(
-                            status = if (log.exitCode == 0) ArtifactStatus.SUCCESS else ArtifactStatus.FAILED,
-                            exitCode = log.exitCode,
-                            executionOutput = log.output.ifEmpty { log.errorOutput ?: "(Команда завершена, код: ${log.exitCode})" }
-                        )
-                    )
-
-                    if (log.workingDir != _currentWorkingDir.value) {
-                        _currentWorkingDir.value = log.workingDir
-                    }
-                    refreshFiles()
+                // If command references an unauthorized path, trigger SAF
+                val extractedPath = extractPathFromCommand(cmdToRun)
+                if (extractedPath != null && !fileSystemEngine.isFolderAuthorized(extractedPath, grantedFolders.value)) {
+                    _pendingFolderPermission.value = fileSystemEngine.extractRequiredFolder(extractedPath)
+                    return artifact
                 }
-                ArtifactType.FILE_CREATE, ArtifactType.FILE_EDIT -> {
-                    try {
-                        val path = artifact.targetPath ?: "${_currentWorkingDir.value}/output.txt"
-                        val (_, backup) = fileSystemEngine.writeFile(path, artifact.content)
-                        fileLogDao.insertFileLog(
-                            FileLogEntity(
-                                operation = if (artifact.type == ArtifactType.FILE_CREATE) "CREATE" else "WRITE",
-                                path = path,
-                                details = "Выполнен артефакт агента: ${artifact.title}",
-                                status = "SUCCESS",
-                                backupContent = backup
-                            )
-                        )
-                        updateArtifactInCurrentMessages(
-                            artifact.copy(
-                                status = ArtifactStatus.SUCCESS,
-                                executionOutput = "Файл успешно сохранен на устройстве:\n$path"
-                            )
-                        )
-                        refreshFiles()
-                    } catch (e: Exception) {
-                        updateArtifactInCurrentMessages(
-                            artifact.copy(
-                                status = ArtifactStatus.FAILED,
-                                executionOutput = "Ошибка сохранения: ${e.message}"
-                            )
-                        )
-                    }
+
+                val log = terminalEngine.executeCommand(
+                    command = cmdToRun,
+                    workingDir = _currentWorkingDir.value,
+                    source = "AGENT"
+                )
+
+                commandLogDao.insertLog(
+                    CommandLogEntity(
+                        command = log.command,
+                        workingDir = log.workingDir,
+                        exitCode = log.exitCode,
+                        output = log.output,
+                        errorOutput = log.errorOutput,
+                        durationMs = log.durationMs,
+                        source = log.source
+                    )
+                )
+
+                val updated = artifact.copy(
+                    status = if (log.exitCode == 0) ArtifactStatus.SUCCESS else ArtifactStatus.FAILED,
+                    exitCode = log.exitCode,
+                    executionOutput = log.output.ifEmpty { log.errorOutput ?: "(Команда завершена, код: ${log.exitCode})" }
+                )
+                updateArtifactSuspend(updated)
+
+                if (log.workingDir != _currentWorkingDir.value) {
+                    _currentWorkingDir.value = log.workingDir
                 }
-                else -> {}
+                refreshFiles()
+                updated
             }
+            ArtifactType.FILE_CREATE, ArtifactType.FILE_EDIT -> {
+                val updated = try {
+                    val path = artifact.targetPath ?: "${_currentWorkingDir.value}/output.txt"
+                    val (_, backup) = fileSystemEngine.writeFile(path, artifact.content)
+                    fileLogDao.insertFileLog(
+                        FileLogEntity(
+                            operation = if (artifact.type == ArtifactType.FILE_CREATE) "CREATE" else "WRITE",
+                            path = path,
+                            details = "Выполнен артефакт агента: ${artifact.title}",
+                            status = "SUCCESS",
+                            backupContent = backup
+                        )
+                    )
+                    artifact.copy(
+                        status = ArtifactStatus.SUCCESS,
+                        executionOutput = "Файл успешно сохранен на устройстве:\n$path"
+                    )
+                } catch (e: Exception) {
+                    artifact.copy(
+                        status = ArtifactStatus.FAILED,
+                        executionOutput = "Ошибка сохранения: ${e.message}"
+                    )
+                }
+                updateArtifactSuspend(updated)
+                refreshFiles()
+                updated
+            }
+            else -> artifact
         }
     }
 
@@ -658,28 +688,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return null
     }
 
-    private fun updateArtifactInCurrentMessages(updatedArtifact: Artifact) {
-        viewModelScope.launch {
-            val convId = _activeConversationId.value
-            val messages = currentMessages.value
-            for (msg in messages) {
-                val artifactIdx = msg.artifacts.indexOfFirst { it.id == updatedArtifact.id }
-                if (artifactIdx != -1) {
-                    val updatedArtifacts = msg.artifacts.toMutableList().apply {
-                        this[artifactIdx] = updatedArtifact
-                    }
-                    chatDao.insertMessage(
-                        MessageEntity(
-                            id = msg.id,
-                            conversationId = convId,
-                            role = msg.role.name,
-                            content = msg.content,
-                            artifactsJson = serializeArtifacts(updatedArtifacts),
-                            timestamp = msg.timestamp
-                        )
-                    )
-                    break
+    private suspend fun updateArtifactSuspend(updatedArtifact: Artifact) {
+        val convId = _activeConversationId.value
+        if (convId.isEmpty()) return
+        val messages = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
+        for (msg in messages) {
+            val artifactIdx = msg.artifacts.indexOfFirst { it.id == updatedArtifact.id }
+            if (artifactIdx != -1) {
+                val updatedArtifacts = msg.artifacts.toMutableList().apply {
+                    this[artifactIdx] = updatedArtifact
                 }
+                chatDao.insertMessage(
+                    MessageEntity(
+                        id = msg.id,
+                        conversationId = convId,
+                        role = msg.role.name,
+                        content = msg.content,
+                        artifactsJson = serializeArtifacts(updatedArtifacts),
+                        timestamp = msg.timestamp
+                    )
+                )
+                break
             }
         }
     }
@@ -692,20 +721,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (userPrompt.isBlank() || _isGenerating.value) return
         val prompt = userPrompt.trim()
 
-        viewModelScope.launch {
+        generationJob = viewModelScope.launch {
             val convId = _activeConversationId.value
-            val userMsgId = UUID.randomUUID().toString()
+            stopRequested = false
 
             // 1. Insert user message
             chatDao.insertMessage(
                 MessageEntity(
-                    id = userMsgId,
+                    id = UUID.randomUUID().toString(),
                     conversationId = convId,
                     role = MessageRole.USER.name,
                     content = prompt,
                     artifactsJson = "[]"
                 )
             )
+
+            // Обновляем заголовок сессии после первого пользовательского сообщения
+            val existingMsgs = chatDao.getMessagesForConversation(convId).first()
+            if (existingMsgs.size <= 2) {
+                val conv = chatDao.getConversationById(convId)
+                if (conv != null) {
+                    val titleSnippet = if (prompt.length > 28) prompt.take(28) + "..." else prompt
+                    chatDao.insertConversation(conv.copy(title = titleSnippet, updatedAt = System.currentTimeMillis()))
+                }
+            }
 
             // Check active custom connection
             val activeConn = activeConnection.value
@@ -731,108 +770,296 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            _isGenerating.value = true
+            runAgentLoop(prompt, activeConn)
+        }
+    }
 
-            // Insert initial assistant message for streaming
-            val assistantMsgId = UUID.randomUUID().toString()
-            val initialAssistantEntity = MessageEntity(
+    /**
+     * Остановка генерации и всей автономной цепочки пользователем (кнопка «Стоп»).
+     */
+    fun stopGeneration() {
+        stopRequested = true
+        generationJob?.cancel()
+    }
+
+    /**
+     * Цикл агента: запрос → ответ → выполнение артефактов → возврат результатов модели → ...
+     * Агент НЕ останавливается, пока задача не выполнена полностью
+     * (или пока пользователь не нажал «Стоп» / не исчерпан лимит итераций).
+     */
+    private suspend fun runAgentLoop(initialPrompt: String, conn: CustomConnection) {
+        var prompt = initialPrompt
+        var iteration = 0
+        _isGenerating.value = true
+        try {
+            while (iteration < MAX_AGENT_ITERATIONS && !stopRequested) {
+                iteration++
+                val result = requestModelTurn(prompt, conn) ?: break
+                val artifacts = result.artifacts
+
+                if (artifacts.isEmpty()) {
+                    // Модель спросила «продолжить?» — продолжаем автоматически, не останавливаемся
+                    val lower = result.responseText.lowercase()
+                    val asksToContinue = lower.contains("продолжить?") || lower.contains("продолжать?") ||
+                        lower.contains("продолжение?") || lower.contains("continue?") ||
+                        lower.contains("нужно ли мне продолжить") || lower.contains("хотите, чтобы я продолжил") ||
+                        lower.contains("мне продолжить?")
+                    if (asksToContinue && iteration < MAX_AGENT_ITERATIONS && !stopRequested) {
+                        insertSystemMessage("⚙️ Агент запросил продолжение — продолжаю выполнение задачи автоматически...")
+                        prompt = "Продолжай выполнение задачи с того места, где остановился. Не спрашивай подтверждений — действуй. Если задача полностью выполнена — подведи итог без артефактов."
+                        continue
+                    }
+                    break // Задача выполнена — модель ответила без артефактов
+                }
+
+                val unauthorizedFolder = findUnauthorizedFolder(artifacts)
+                if (unauthorizedFolder != null) {
+                    // Пауза на запрос SAF-разрешения; цепочка продолжится после выдачи разрешения
+                    _pendingFolderPermission.value = unauthorizedFolder
+                    break
+                }
+
+                if (_operationMode.value == AgentOperationMode.EXTRA) {
+                    // EXTRA: автономное выполнение всех действий и возврат результатов модели
+                    _agentStage.value = AgentStage.EXECUTING
+                    val executed = mutableListOf<Artifact>()
+                    for (art in artifacts) {
+                        if (stopRequested) break
+                        if (art.status == ArtifactStatus.IDLE && art.isAgentExecutable()) {
+                            executed.add(executeArtifactInternal(art))
+                            if (_pendingFolderPermission.value != null) break
+                        }
+                    }
+                    if (stopRequested || _pendingFolderPermission.value != null) break
+
+                    val summary = buildExecutionSummary(executed.ifEmpty { artifacts })
+                    insertSystemMessage(summary)
+                    prompt = buildContinuationPrompt(summary)
+                } else {
+                    // SAFETY: артефакты выполняет пользователь из карточек; цепочка продолжится
+                    // автоматически через maybeContinueAgentChain(), когда все будут обработаны.
+                    val dangerous = artifacts.firstOrNull { it.isDangerous }
+                    if (dangerous != null) {
+                        _pendingDangerousArtifact.value = dangerous
+                    }
+                    break
+                }
+            }
+            if (iteration >= MAX_AGENT_ITERATIONS && !stopRequested) {
+                insertSystemMessage("⚠️ Достигнут лимит автономных итераций ($MAX_AGENT_ITERATIONS). Цепочка выполнения остановлена — отправьте сообщение, чтобы продолжить.")
+            }
+        } catch (_: CancellationException) {
+            // Остановлено пользователем — частичный ответ уже сохранён в requestModelTurn
+        } finally {
+            _isGenerating.value = false
+            _agentStage.value = AgentStage.IDLE
+            _thinkingText.value = ""
+        }
+    }
+
+    /**
+     * Одна итерация запроса к модели: стримит Thinking (рассуждения) и ответ, сохраняет сообщение.
+     * Возвращает null при ошибке или остановке пользователем.
+     */
+    private suspend fun requestModelTurn(prompt: String, conn: CustomConnection): AgentExecutionResult? {
+        val convId = _activeConversationId.value
+        val assistantMsgId = UUID.randomUUID().toString()
+
+        _thinkingText.value = ""
+        _agentStage.value = AgentStage.CONNECTING
+
+        chatDao.insertMessage(
+            MessageEntity(
                 id = assistantMsgId,
                 conversationId = convId,
                 role = MessageRole.ASSISTANT.name,
                 content = "...",
                 artifactsJson = "[]"
             )
-            chatDao.insertMessage(initialAssistantEntity)
+        )
 
-            var lastStreamUpdateTime = 0L
+        var lastStreamUpdateTime = 0L
+        var lastPartialText = ""
+        var streamWriteJob: Job? = null
 
-            try {
-                val result = aiAgentService.executeCustomPrompt(
-                    prompt = prompt,
-                    connection = activeConn,
-                    workingDir = _currentWorkingDir.value,
-                    conversationHistory = currentMessages.value,
-                    operationMode = _operationMode.value,
-                    grantedFolders = grantedFolders.value,
-                    onPartialText = { streamedText ->
-                        val now = System.currentTimeMillis()
-                        // Update DB throttled every 150ms to keep UI smooth
-                        if (now - lastStreamUpdateTime > 150) {
-                            lastStreamUpdateTime = now
-                            viewModelScope.launch {
-                                chatDao.insertMessage(
-                                    MessageEntity(
-                                        id = assistantMsgId,
-                                        conversationId = convId,
-                                        role = MessageRole.ASSISTANT.name,
-                                        content = streamedText,
-                                        artifactsJson = "[]"
-                                    )
+        return try {
+            val result = aiAgentService.executeCustomPrompt(
+                prompt = prompt,
+                connection = conn,
+                workingDir = _currentWorkingDir.value,
+                conversationHistory = currentMessages.value,
+                operationMode = _operationMode.value,
+                grantedFolders = grantedFolders.value,
+                onPartialReasoning = { reasoningText ->
+                    // Этап "Thinking" — модель анализирует задачу перед ответом
+                    _agentStage.value = AgentStage.THINKING
+                    _thinkingText.value = reasoningText
+                },
+                onPartialText = { streamedText ->
+                    lastPartialText = streamedText
+                    _agentStage.value = AgentStage.RESPONDING
+                    val now = System.currentTimeMillis()
+                    // Update DB throttled every 150ms to keep UI smooth
+                    if (now - lastStreamUpdateTime > 150) {
+                        lastStreamUpdateTime = now
+                        streamWriteJob = viewModelScope.launch {
+                            chatDao.insertMessage(
+                                MessageEntity(
+                                    id = assistantMsgId,
+                                    conversationId = convId,
+                                    role = MessageRole.ASSISTANT.name,
+                                    content = streamedText,
+                                    artifactsJson = "[]"
                                 )
-                            }
+                            )
                         }
                     }
-                )
+                }
+            )
 
-                // Final save of completed message with artifacts
-                val finalAssistantEntity = MessageEntity(
+            streamWriteJob?.join()
+
+            // Final save of completed message with artifacts
+            chatDao.insertMessage(
+                MessageEntity(
                     id = assistantMsgId,
                     conversationId = convId,
                     role = MessageRole.ASSISTANT.name,
                     content = result.responseText,
                     artifactsJson = serializeArtifacts(result.artifacts)
                 )
-                chatDao.insertMessage(finalAssistantEntity)
-
-                // Check if any artifact requires an unauthorized folder
-                val unauthorizedFolder = result.artifacts.firstNotNullOfOrNull { art ->
-                    val path = art.targetPath ?: if (art.type == ArtifactType.TERMINAL_COMMAND) {
-                        extractPathFromCommand(art.command ?: art.content)
-                    } else null
-                    if (path != null && !fileSystemEngine.isFolderAuthorized(path, grantedFolders.value)) {
-                        fileSystemEngine.extractRequiredFolder(path)
-                    } else null
-                }
-
-                if (unauthorizedFolder != null) {
-                    _pendingFolderPermission.value = unauthorizedFolder
-                } else if (_operationMode.value == AgentOperationMode.EXTRA) {
-                    // EXTRA MODE: Autonomous execution of all executable artifacts!
-                    for (art in result.artifacts) {
-                        if (art.isExecutable() && art.status == ArtifactStatus.IDLE) {
-                            executeArtifact(art)
-                        }
-                    }
-                } else {
-                    // SAFETY MODE: Step-by-step confirmation. If any artifact is dangerous, prompt user
-                    val dangerous = result.artifacts.firstOrNull { it.isDangerous }
-                    if (dangerous != null) {
-                        _pendingDangerousArtifact.value = dangerous
-                    }
-                }
-
-                // Update conversation title if first user message
-                if (currentMessages.value.size <= 3) {
-                    val titleSnippet = if (prompt.length > 28) prompt.take(28) + "..." else prompt
-                    val conv = chatDao.getConversationById(convId)
-                    if (conv != null) {
-                        chatDao.insertConversation(conv.copy(title = titleSnippet, updatedAt = System.currentTimeMillis()))
-                    }
-                }
-            } catch (e: Exception) {
-                val errorText = "❌ ${e.message ?: "Неизвестная ошибка при запросе к API"}"
+            )
+            result
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                streamWriteJob?.join()
                 chatDao.insertMessage(
                     MessageEntity(
                         id = assistantMsgId,
                         conversationId = convId,
                         role = MessageRole.ASSISTANT.name,
-                        content = errorText,
+                        content = stoppedText(lastPartialText),
                         artifactsJson = "[]"
                     )
                 )
-            } finally {
-                _isGenerating.value = false
             }
+            throw e
+        } catch (e: Exception) {
+            val content = if (stopRequested) {
+                stoppedText(lastPartialText)
+            } else {
+                "❌ ${e.message ?: "Неизвестная ошибка при запросе к API"}"
+            }
+            withContext(NonCancellable) {
+                streamWriteJob?.join()
+                chatDao.insertMessage(
+                    MessageEntity(
+                        id = assistantMsgId,
+                        conversationId = convId,
+                        role = MessageRole.ASSISTANT.name,
+                        content = content,
+                        artifactsJson = "[]"
+                    )
+                )
+            }
+            null
+        }
+    }
+
+    private fun stoppedText(partial: String): String {
+        val base = partial.trim()
+        return if (base.isEmpty()) {
+            "⏹ Генерация остановлена пользователем."
+        } else {
+            "$base\n\n⏹ _Остановлено пользователем._"
+        }
+    }
+
+    private fun findUnauthorizedFolder(artifacts: List<Artifact>): String? {
+        return artifacts.firstNotNullOfOrNull { art ->
+            val path = art.targetPath ?: extractPathFromCommand(art.command ?: "")
+            if (path != null && !fileSystemEngine.isFolderAuthorized(path, grantedFolders.value)) {
+                fileSystemEngine.extractRequiredFolder(path)
+            } else null
+        }
+    }
+
+    private suspend fun insertSystemMessage(content: String) {
+        chatDao.insertMessage(
+            MessageEntity(
+                id = UUID.randomUUID().toString(),
+                conversationId = _activeConversationId.value,
+                role = MessageRole.SYSTEM.name,
+                content = content,
+                artifactsJson = "[]"
+            )
+        )
+    }
+
+    private fun buildExecutionSummary(artifacts: List<Artifact>): String {
+        val sb = StringBuilder("⚙️ Результаты выполнения действий агента:\n")
+        for (a in artifacts) {
+            val statusLabel = when (a.status) {
+                ArtifactStatus.SUCCESS -> "✅ УСПЕХ"
+                ArtifactStatus.FAILED -> "❌ ОШИБКА"
+                ArtifactStatus.REJECTED -> "⛔ ОТКЛОНЕНО ПОЛЬЗОВАТЕЛЕМ"
+                else -> "⏸ НЕ ВЫПОЛНЕНО"
+            }
+            sb.append("- ${a.title}: $statusLabel")
+            a.exitCode?.let { sb.append(" (код выхода: $it)") }
+            sb.append("\n")
+            val out = a.executionOutput?.trim()
+            if (!out.isNullOrBlank()) {
+                sb.append("```\n").append(out.take(1200)).append("\n```\n")
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun buildContinuationPrompt(summary: String): String {
+        return summary + "\n\nПроанализируй результаты выполнения и ПРОДОЛЖАЙ исходную задачу без остановок и вопросов. " +
+            "Если нужны новые действия — сгенерируй следующие артефакты. Если действие завершилось ошибкой — попробуй другой подход. " +
+            "Если задача полностью выполнена — подведи краткий итог БЕЗ артефактов."
+    }
+
+    private fun Artifact.isAgentExecutable(): Boolean =
+        isExecutable() ||
+            type == ArtifactType.FILE_CREATE ||
+            type == ArtifactType.FILE_EDIT ||
+            (type == ArtifactType.CODE_SNIPPET && !command.isNullOrBlank())
+
+    /**
+     * Автопродолжение цепочки агента после того, как пользователь завершил все артефакты
+     * последнего сообщения ассистента (режим Safety / возобновление после SAF-разрешения).
+     */
+    private suspend fun maybeContinueAgentChain() {
+        if (_isGenerating.value || stopRequested) return
+        val conn = activeConnection.value ?: return
+        val convId = _activeConversationId.value
+        if (convId.isEmpty()) return
+
+        val messages = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
+        val lastAssistant = messages.lastOrNull { it.role == MessageRole.ASSISTANT && it.artifacts.isNotEmpty() } ?: return
+        val arts = lastAssistant.artifacts
+
+        val stillPending = arts.any {
+            it.status == ArtifactStatus.IDLE ||
+                it.status == ArtifactStatus.EXECUTING ||
+                it.status == ArtifactStatus.AWAITING_CONFIRMATION
+        }
+        if (stillPending) return
+
+        val anySuccess = arts.any { it.status == ArtifactStatus.SUCCESS }
+        val anyFailure = arts.any { it.status == ArtifactStatus.FAILED }
+        val isExtra = _operationMode.value == AgentOperationMode.EXTRA
+        // Safety: продолжаем, только если хоть что-то реально выполнено успешно;
+        // Extra: продолжаем и после ошибок, чтобы агент исправил их сам.
+        if (!anySuccess && !(isExtra && anyFailure)) return
+
+        val summary = buildExecutionSummary(arts)
+        generationJob = viewModelScope.launch {
+            insertSystemMessage(summary)
+            runAgentLoop(buildContinuationPrompt(summary), conn)
         }
     }
 
@@ -967,5 +1194,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isActive = isActive,
             createdAt = createdAt
         )
+    }
+
+    companion object {
+        // Максимум автономных итераций «запрос → выполнение → возврат результатов» за одну цепочку
+        private const val MAX_AGENT_ITERATIONS = 12
     }
 }
