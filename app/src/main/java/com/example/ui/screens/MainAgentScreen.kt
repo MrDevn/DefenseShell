@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -492,7 +493,41 @@ fun MainAgentScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Agent Operation Mode Chip (Safety vs Extra)
+                            // Path Badge / Pin
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        activeTab = AppNavigationTab.FILES
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = workingDir.substringAfterLast("/").ifEmpty { "Хранилище" },
+                                        style = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            // Agent Operation Mode Chip (Safety vs Extra) — крайний справа
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
                                 color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
@@ -522,40 +557,6 @@ fun MainAgentScreen(
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
                                             color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
-                            // Path Badge / Pin
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        activeTab = AppNavigationTab.FILES
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = ClaudeTerracotta,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = workingDir.substringAfterLast("/").ifEmpty { "Хранилище" },
-                                        style = TextStyle(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     )
                                 }
@@ -763,6 +764,14 @@ fun ClaudeChatView(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // При появлении клавиатуры прокручиваем чат вниз, чтобы последние сообщения были видны
+    val imeBottomInset = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottomInset) {
+        if (imeBottomInset > 0 && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size)
         }
     }
 
@@ -1007,7 +1016,9 @@ fun ClaudeChatView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
+                // Поднимаем поле ввода над клавиатурой (edge-to-edge: adjustResize не работает,
+                // поэтому явно учитываем IME insets вместе с navigation bar)
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {

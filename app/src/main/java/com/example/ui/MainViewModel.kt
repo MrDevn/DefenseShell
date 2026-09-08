@@ -520,19 +520,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val convId = _activeConversationId.value
+
+            // Ищем сообщение модели с артефактами ДО вставки подтверждения,
+            // иначе подтверждение само станет «последним сообщением ассистента» и агент «заглохнет»
+            val msgs = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
+            val lastAssistantMsg = msgs.lastOrNull { it.role == MessageRole.ASSISTANT }
+
             chatDao.insertMessage(
                 MessageEntity(
                     id = UUID.randomUUID().toString(),
                     conversationId = convId,
-                    role = MessageRole.ASSISTANT.name,
+                    role = MessageRole.SYSTEM.name,
                     content = "✅ Разрешение на доступ к папке **${granted.displayName}** (`${granted.folderPath}`) успешно получено и сохранено в системе (SAF). Продолжаю выполнение задачи...",
                     artifactsJson = "[]"
                 )
             )
 
             // Auto-execute pending artifacts if in EXTRA mode or if previously blocked
-            val msgs = chatDao.getMessagesForConversation(convId).first().map { parseEntityToMessage(it) }
-            val lastAssistantMsg = msgs.lastOrNull { it.role == MessageRole.ASSISTANT }
             if (lastAssistantMsg != null && lastAssistantMsg.artifacts.isNotEmpty()) {
                 for (artifact in lastAssistantMsg.artifacts) {
                     if (artifact.status == ArtifactStatus.IDLE && artifact.isAgentExecutable()) {
