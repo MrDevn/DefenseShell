@@ -269,7 +269,7 @@ class AiAgentService(
             throw IllegalStateException("Сетевая ошибка при запросе к ${connection.cleanBaseUrl}: ${e.localizedMessage ?: e.javaClass.simpleName}. Проверьте доступность API и интернет-соединение.")
         }
 
-        val rawText = fullResponseText.toString().trim()
+        val rawText = normalizeModelText(fullResponseText.toString())
         if (rawText.isEmpty()) {
             throw IllegalStateException("API вернул пустой текст ответа. Проверьте параметры модели '${connection.modelId}'.")
         }
@@ -464,7 +464,7 @@ class AiAgentService(
             val choice = choices.getJSONObject(0)
             val delta = choice.optJSONObject("delta")
             if (delta != null && delta.has("content")) {
-                return delta.optString("content", "")
+                return extractTextValue(delta.opt("content"))
             }
             if (choice.has("text")) {
                 return choice.optString("text", "")
@@ -474,7 +474,7 @@ class AiAgentService(
         // 2. Ollama / custom format
         val message = json.optJSONObject("message")
         if (message != null && message.has("content")) {
-            return message.optString("content", "")
+            return extractTextValue(message.opt("content"))
         }
         if (json.has("response")) {
             return json.optString("response", "")
@@ -517,7 +517,7 @@ class AiAgentService(
                 val choice = choices.getJSONObject(0)
                 val msg = choice.optJSONObject("message")
                 if (msg != null && msg.has("content")) {
-                    return msg.optString("content", "")
+                    return extractTextValue(msg.opt("content"))
                 }
                 if (choice.has("text")) {
                     return choice.optString("text", "")
@@ -526,10 +526,36 @@ class AiAgentService(
             if (json.has("response")) {
                 return json.optString("response", "")
             }
-            rawBody
+            normalizeModelText(rawBody)
         } catch (_: Exception) {
-            rawBody
+            normalizeModelText(rawBody)
         }
+    }
+
+    private fun extractTextValue(value: Any?): String {
+        return when (value) {
+            is String -> value
+            is JSONArray -> buildString {
+                for (index in 0 until value.length()) {
+                    val part = value.optJSONObject(index) ?: continue
+                    append(part.optString("text").ifBlank { part.optString("content") })
+                }
+            }
+            else -> ""
+        }
+    }
+
+    private fun normalizeModelText(text: String): String {
+        var result = text.trim()
+        if (result.length >= 2 && result.first() == '"' && result.last() == '"') {
+            result = runCatching { JSONObject("{\"value\":$result}").optString("value") }
+                .getOrDefault(result.substring(1, result.length - 1))
+        }
+        return result
+            .replace("\\r\\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\\\"", "\"")
+            .trim()
     }
 
     private fun parseApiError(statusCode: Int, errorBody: String): String {
