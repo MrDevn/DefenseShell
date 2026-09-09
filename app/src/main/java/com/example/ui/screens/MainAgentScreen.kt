@@ -866,53 +866,6 @@ fun ClaudeChatView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Connection warning banner if not configured
-        if (activeConnection == null) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenConnectionSettings() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WarningAmber,
-                        contentDescription = null,
-                        tint = ClaudeDanger,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Подключение не настроено",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 12.sp
-                            )
-                        )
-                        Text(
-                            text = "Добавьте base-url, api-key и model-id",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                    Button(
-                        onClick = onOpenConnectionSettings,
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text("Настроить", fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-
         // Message Feed
         Box(
             modifier = Modifier
@@ -1065,7 +1018,7 @@ fun ClaudeChatView(
                 modifier = Modifier
                     .widthIn(max = 430.dp)
                     .fillMaxWidth(),
-                shape = CircleShape,
+                shape = RoundedCornerShape(14.dp),
                 color = Color(0xFF1A1A1A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                 shadowElevation = 3.dp
@@ -1169,17 +1122,6 @@ fun ClaudeChatView(
                             .testTag("chat_input_field")
                     )
 
-                    Spacer(modifier = Modifier.width(2.dp))
-
-                    IconButton(onClick = { }, modifier = Modifier.size(30.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Голосовой ввод",
-                            tint = Color.White.copy(alpha = 0.72f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
                     IconButton(
                         onClick = {
                             if (isGenerating) {
@@ -1192,6 +1134,7 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(30.dp)
+                            .offset(x = (-3).dp)
                             .clip(CircleShape)
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
