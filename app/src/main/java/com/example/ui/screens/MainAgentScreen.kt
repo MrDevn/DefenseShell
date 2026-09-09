@@ -1133,7 +1133,7 @@ fun ClaudeChatView(
                 },
                 enabled = isGenerating || promptInput.isNotBlank(),
                 modifier = Modifier
-                    .size(25.9.dp)
+                    .size(25.8.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
                     .testTag("send_button")
