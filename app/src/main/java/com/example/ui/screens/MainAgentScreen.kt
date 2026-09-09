@@ -553,7 +553,7 @@ fun MainAgentScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                            .padding(horizontal = 14.dp, vertical = 1.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -571,7 +571,7 @@ fun MainAgentScreen(
                                 ),
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -617,7 +617,7 @@ fun MainAgentScreen(
                                     .testTag("mode_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -1135,8 +1135,8 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(30.dp)
-                            .offset(x = (-6).dp)
-                            .clip(CircleShape)
+                            .offset(x = (-8).dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
                     ) {
