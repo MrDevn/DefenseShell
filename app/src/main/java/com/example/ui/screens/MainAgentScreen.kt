@@ -1067,7 +1067,7 @@ fun ClaudeChatView(
                         onClick = onPickAttachments,
                         modifier = Modifier
                             .size(30.dp)
-                            .offset(x = 2.dp)
+                            .offset(x = 1.8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
