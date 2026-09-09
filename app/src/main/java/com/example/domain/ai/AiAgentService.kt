@@ -347,7 +347,7 @@ class AiAgentService(
             .post(messageBody)
             .apply { headers(this) }
             .build()
-        httpClient.newCall(messageRequest).execute().use { response ->
+        return httpClient.newCall(messageRequest).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) throw IllegalStateException("OpenCode message: HTTP ${response.code}: $body")
             val partsResponse = JSONObject(body).optJSONArray("parts") ?: JSONArray()
