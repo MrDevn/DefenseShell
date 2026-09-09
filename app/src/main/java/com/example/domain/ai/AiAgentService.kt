@@ -86,7 +86,7 @@ class AiAgentService(
         })
 
         // Add previous conversation messages (last 10 to keep within context limits)
-        val recentHistory = conversationHistory.takeLast(if (operationMode == AgentOperationMode.FAST) 4 else 10)
+        val recentHistory = conversationHistory.takeLast(10)
         for (msg in recentHistory) {
             val roleStr = when (msg.role) {
                 MessageRole.USER -> "user"
@@ -113,10 +113,10 @@ class AiAgentService(
                     .replace("{{messages}}", messagesJson.toString())
                     .replace("{{stream}}", "true")
             } catch (_: Exception) {
-                    buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true, fast = operationMode == AgentOperationMode.FAST)
+                    buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true)
             }
         } else {
-            buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true, fast = operationMode == AgentOperationMode.FAST)
+            buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true)
         }
 
         val requestBuilder = Request.Builder()
@@ -337,19 +337,12 @@ class AiAgentService(
         }
     }
 
-    private fun buildDefaultOpenAiBody(modelId: String, messages: JSONArray, stream: Boolean, fast: Boolean = false): String {
+    private fun buildDefaultOpenAiBody(modelId: String, messages: JSONArray, stream: Boolean): String {
         val obj = JSONObject()
         obj.put("model", modelId)
         obj.put("messages", messages)
         obj.put("stream", stream)
-        obj.put("temperature", if (fast) 0.3 else 0.7)
-        if (fast) {
-            // Providers use different names for disabling chain-of-thought. Sending all
-            // common hints is harmless for OpenAI-compatible servers that ignore unknown keys.
-            obj.put("max_tokens", 600)
-            obj.put("reasoning_effort", "low")
-            obj.put("enable_thinking", false)
-        }
+        obj.put("temperature", 0.7)
         return obj.toString()
     }
 
@@ -505,26 +498,12 @@ class AiAgentService(
 В этом режиме твои действия выполняются АВТОМАТИЧЕСКИ без пошагового запроса подтверждения у пользователя (в пределах разрешённых директорий).
 Генерируй все необходимые команды и файлы для полного выполнения задачи от начала до конца.
 """.trimIndent()
-            AgentOperationMode.FAST -> """
-РЕЖИМ РАБОТЫ: FAST — БЫСТРЫЙ EXTRA
-Действуй автономно в пределах разрешённых директорий. Не планируй простые задачи и не пиши длинные рассуждения.
-Для просьб вроде «скопируй», «перемести», «удали», «создай» сразу сгенерируй ОДИН нужный artifact:terminal и выполни действие.
-Не объясняй очевидное, не задавай лишних вопросов и не создавай artifact:plan для одной команды.
-После выполнения верни одну короткую строку с результатом.
-""".trimIndent()
             AgentOperationMode.SAFETY -> """
 РЕЖИМ РАБОТЫ: SAFETY — ПОДТВЕРЖДЕНИЕ КАЖДОГО ШАГА
 В этом режиме перед каждым выполнением действия пользователь видит параметры и нажимает «Выполнить».
 Описывай свои шаги понятно и прозрачно.
 """.trimIndent()
         }
-
-        val fastTail = if (operationMode == AgentOperationMode.FAST) """
-
-КРИТИЧЕСКОЕ ПРАВИЛО FAST:
-Если запрос можно выполнить одной shell-командой, не рассуждай и не составляй план: сразу верни один artifact:terminal.
-Для копирования архива используй cp -f "источник" "назначение". Если путь внешнего хранилища не разрешён, запроси только необходимое разрешение через целевой путь.
-""".trimIndent() else ""
 
         return """
 Ты — CodeStudio, автономный ИИ-агент с реальным доступом к файловой системе Android устройства и терминалу.
@@ -599,8 +578,7 @@ options: Вариант 1, Вариант 2, Вариант 3
 Приложение покажет вопрос пользователю, и он ОБЯЗАН ответить; ответ придёт следующим сообщением. Никогда не повторяй вопрос, на который уже получен ответ. Если вопросов нет — не генерируй artifact:question.
 
 Отвечай вежливо, кратко и структурированно на русском языке. Не используй эмодзи — только чистый текст и markdown.
-$fastTail
-""".trimIndent()
+        """.trimIndent()
     }
 
     private fun parseArtifactsFromModelOutput(output: String): Pair<String, List<Artifact>> {

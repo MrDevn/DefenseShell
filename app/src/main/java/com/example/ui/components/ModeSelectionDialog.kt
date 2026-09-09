@@ -94,18 +94,6 @@ fun ModeSelectionDialog(
                     onClick = { selectedMode = AgentOperationMode.EXTRA }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ModeOptionCard(
-                    mode = AgentOperationMode.FAST,
-                    isSelected = selectedMode == AgentOperationMode.FAST,
-                    icon = Icons.Default.Bolt,
-                    title = "Fast (Быстрый)",
-                    subtitle = "Extra без лишних размышлений",
-                    description = "Агент действует автономно, отвечает коротко и использует минимальный контекст, чтобы быстрее переходить к результату.",
-                    onClick = { selectedMode = AgentOperationMode.FAST }
-                )
-
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Row(

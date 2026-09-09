@@ -1073,7 +1073,6 @@ fun ClaudeChatView(
                     Text(
                         text = when (operationMode) {
                             AgentOperationMode.EXTRA -> "Режим Extra: команды и операции выполняются автоматически"
-                            AgentOperationMode.FAST -> "Режим Fast: быстрые автономные ответы и действия"
                             AgentOperationMode.SAFETY -> "Режим Safety: требуется подтверждение выполнения"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(

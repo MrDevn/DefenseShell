@@ -14,10 +14,5 @@ enum class AgentOperationMode(
         title = "Extra",
         badgeLabel = "Extra",
         description = "Полная автономность: действия выполняются автоматически от начала до конца в пределах разрешённых папок"
-    ),
-    FAST(
-        title = "Fast",
-        badgeLabel = "Fast",
-        description = "Автономный режим с короткими ответами, минимальным контекстом и фокусом на быстрых действиях"
     )
 }
