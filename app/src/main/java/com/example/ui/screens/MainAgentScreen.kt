@@ -550,6 +550,27 @@ fun MainAgentScreen(
                         Text(text = activeTab.label, style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.weight(1f))
                         Surface(
+                            shape = CircleShape,
+                            color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable { showModeSelectionDialog = true }
+                                .testTag("mode_selector_chip")
+                        ) {
+                            Icon(
+                                imageVector = if (operationMode != AgentOperationMode.SAFETY) Icons.Default.Bolt else Icons.Default.Security,
+                                contentDescription = operationMode.title,
+                                tint = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { showCustomConnectionDialog = true }
@@ -597,53 +618,6 @@ fun MainAgentScreen(
                         }
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 0.dp)
-                            .offset(y = (-2).dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                 color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                     if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                                ),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showModeSelectionDialog = true }
-                                    .testTag("mode_selector_chip")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                         imageVector = if (operationMode != AgentOperationMode.SAFETY) Icons.Default.Bolt else Icons.Default.Security,
-                                        contentDescription = null,
-                                         tint = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                         text = operationMode.title,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 11.sp,
-                                             color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                        thickness = 1.dp
-                    )
                 }
             },
             modifier = modifier.fillMaxSize()
