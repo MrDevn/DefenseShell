@@ -616,6 +616,7 @@ fun MainAgentScreen(
                             onOpenConnectionSettings = { showCustomConnectionDialog = true },
                             onSendMessage = { prompt -> viewModel.sendMessage(prompt) },
                             onStopGeneration = { viewModel.stopGeneration() },
+                            onAnswerQuestion = { artifact, answer -> viewModel.answerAgentQuestion(artifact, answer) },
                             onExecuteArtifact = { artifact -> viewModel.executeArtifact(artifact) },
                             onRejectArtifact = { artifact -> viewModel.rejectArtifact(artifact) },
                             onSaveArtifactContent = { artifact, content -> viewModel.saveArtifactContent(artifact, content) },
@@ -748,6 +749,7 @@ fun ClaudeChatView(
     agentStage: AgentStage = AgentStage.IDLE,
     thinkingText: String = "",
     onStopGeneration: () -> Unit = {},
+    onAnswerQuestion: (Artifact, String) -> Unit = { _, _ -> },
     onOpenModeSelection: () -> Unit = {},
     onRejectArtifact: (Artifact) -> Unit = {}
 ) {
@@ -848,7 +850,8 @@ fun ClaudeChatView(
                         onExecuteArtifact = onExecuteArtifact,
                         onRejectArtifact = onRejectArtifact,
                         onSaveArtifactContent = onSaveArtifactContent,
-                        onDangerConfirmRequest = onDangerConfirmRequest
+                        onDangerConfirmRequest = onDangerConfirmRequest,
+                        onAnswerQuestion = onAnswerQuestion
                     )
                 }
 
@@ -1115,7 +1118,8 @@ fun ClaudeMessageRow(
     onSaveArtifactContent: (Artifact, String) -> Unit,
     onDangerConfirmRequest: (Artifact) -> Unit,
     modifier: Modifier = Modifier,
-    onRejectArtifact: (Artifact) -> Unit = {}
+    onRejectArtifact: (Artifact) -> Unit = {},
+    onAnswerQuestion: (Artifact, String) -> Unit = { _, _ -> }
 ) {
     val isUser = message.role == MessageRole.USER
 
@@ -1178,7 +1182,8 @@ fun ClaudeMessageRow(
                                 onExecute = onExecuteArtifact,
                                 onReject = onRejectArtifact,
                                 onSaveContent = onSaveArtifactContent,
-                                onDangerConfirmRequest = onDangerConfirmRequest
+                                onDangerConfirmRequest = onDangerConfirmRequest,
+                                onAnswerQuestion = onAnswerQuestion
                             )
                         }
                     }

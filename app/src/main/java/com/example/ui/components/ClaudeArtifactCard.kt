@@ -25,7 +25,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.Artifact
 import com.example.data.model.ArtifactStatus
 import com.example.data.model.ArtifactType
+import com.example.data.model.PlanItemStatus
 import com.example.ui.theme.*
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 
 @Composable
 fun ClaudeArtifactCard(
@@ -34,7 +37,8 @@ fun ClaudeArtifactCard(
     onSaveContent: (Artifact, String) -> Unit,
     onDangerConfirmRequest: (Artifact) -> Unit,
     modifier: Modifier = Modifier,
-    onReject: (Artifact) -> Unit = {}
+    onReject: (Artifact) -> Unit = {},
+    onAnswerQuestion: (Artifact, String) -> Unit = { _, _ -> }
 ) {
     var isExpanded by remember { mutableStateOf(artifact.isExpanded) }
     var isEditing by remember { mutableStateOf(false) }
@@ -87,8 +91,10 @@ fun ClaudeArtifactCard(
                                 ArtifactType.FILE_CREATE, ArtifactType.FILE_EDIT -> Icons.Default.Description
                                 ArtifactType.CODE_SNIPPET -> Icons.Default.Code
                                 ArtifactType.SYSTEM_INFO -> Icons.Default.Info
+                                ArtifactType.PLAN -> Icons.Default.Checklist
+                                ArtifactType.QUESTION -> Icons.Default.HelpOutline
                             },
-                            contentDescription = "Artifact Type",
+                            contentDescription = "Тип артефакта",
                             tint = if (artifact.isDangerous) ClaudeDanger else ClaudeTerracotta,
                             modifier = Modifier.size(16.dp)
                         )
@@ -118,7 +124,7 @@ fun ClaudeArtifactCard(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                             }
-                            if (artifact.language != null) {
+                            if (artifact.language != null && artifact.type != ArtifactType.PLAN && artifact.type != ArtifactType.QUESTION) {
                                 Text(
                                     text = artifact.language.uppercase(),
                                     style = TextStyle(
@@ -150,7 +156,11 @@ fun ClaudeArtifactCard(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "Done (${artifact.exitCode ?: 0})",
+                                    text = when (artifact.type) {
+                                        ArtifactType.QUESTION -> "Отвечено"
+                                        ArtifactType.FILE_CREATE, ArtifactType.FILE_EDIT -> "Сохранено"
+                                        else -> "Готово (${artifact.exitCode ?: 0})"
+                                    },
                                     color = ClaudeSuccess,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -165,7 +175,7 @@ fun ClaudeArtifactCard(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "Exit ${artifact.exitCode ?: 1}",
+                                    text = if (artifact.exitCode != null) "Код ${artifact.exitCode}" else "Ошибка",
                                     color = ClaudeDanger,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -180,7 +190,7 @@ fun ClaudeArtifactCard(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "Confirm Req.",
+                                    text = "Подтверждение",
                                     color = ClaudeWarning,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -267,109 +277,255 @@ fun ClaudeArtifactCard(
             // Artifact Body (Expanded)
             AnimatedVisibility(visible = isExpanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Toolbar for Artifact (Edit, Copy)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (isEditing) "Editing artifact content" else "Artifact Code / Payload",
-                            style = TextStyle(
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Edit toggle
-                            TextButton(
-                                onClick = {
-                                    if (isEditing) {
-                                        onSaveContent(artifact, editableContent)
+                    when (artifact.type) {
+                        ArtifactType.PLAN -> {
+                            // План агента (как в opencode): чек-лист со статусами шагов
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                if (artifact.planItems.isEmpty() && artifact.content.isNotBlank()) {
+                                    Text(
+                                        text = artifact.content,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    )
+                                }
+                                artifact.planItems.forEach { item ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Icon(
+                                            imageVector = when (item.status) {
+                                                PlanItemStatus.COMPLETED -> Icons.Default.CheckCircle
+                                                PlanItemStatus.IN_PROGRESS -> Icons.Default.Pending
+                                                PlanItemStatus.PENDING -> Icons.Default.RadioButtonUnchecked
+                                            },
+                                            contentDescription = null,
+                                            tint = when (item.status) {
+                                                PlanItemStatus.COMPLETED -> ClaudeSuccess
+                                                PlanItemStatus.IN_PROGRESS -> ClaudeTerracotta
+                                                PlanItemStatus.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            },
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = item.content,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = if (item.status == PlanItemStatus.COMPLETED) {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
+                                                textDecoration = if (item.status == PlanItemStatus.COMPLETED) TextDecoration.LineThrough else null,
+                                                fontWeight = if (item.status == PlanItemStatus.IN_PROGRESS) FontWeight.SemiBold else FontWeight.Normal,
+                                                lineHeight = 18.sp
+                                            ),
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
-                                    isEditing = !isEditing
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(26.dp)
+                                }
+                            }
+                        }
+                        ArtifactType.QUESTION -> {
+                            // Вопрос агента: пользователь обязан ответить (как в opencode)
+                            var customAnswer by remember { mutableStateOf("") }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
-                                    contentDescription = "Edit",
-                                    tint = ClaudeTerracotta,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isEditing) "Save" else "Edit",
-                                    fontSize = 11.sp,
-                                    color = ClaudeTerracotta
+                                    text = artifact.content,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
+                                if (artifact.status == ArtifactStatus.IDLE || artifact.status == ArtifactStatus.AWAITING_CONFIRMATION) {
+                                    artifact.questionOptions.forEach { opt ->
+                                        OutlinedButton(
+                                            onClick = { onAnswerQuestion(artifact, opt) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = opt,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                textAlign = TextAlign.Start,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = customAnswer,
+                                            onValueChange = { customAnswer = it },
+                                            placeholder = { Text("Ваш ответ...", fontSize = 12.sp) },
+                                            singleLine = true,
+                                            textStyle = TextStyle(fontSize = 13.sp),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Button(
+                                            onClick = {
+                                                if (customAnswer.isNotBlank()) {
+                                                    onAnswerQuestion(artifact, customAnswer)
+                                                    customAnswer = ""
+                                                }
+                                            },
+                                            enabled = customAnswer.isNotBlank(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = ClaudeTerracotta,
+                                                contentColor = Color.White
+                                            )
+                                        ) {
+                                            Text("Ответить", fontSize = 12.sp)
+                                        }
+                                    }
+                                } else {
+                                    Surface(
+                                        color = ClaudeSuccess.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = ClaudeSuccess,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Ответ: ${artifact.executionOutput ?: ""}",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            // Toolbar for Artifact (Edit, Copy)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isEditing) "Редактирование содержимого" else "Содержимое файла / команды",
+                                    style = TextStyle(
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                )
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Edit toggle
+                                    TextButton(
+                                        onClick = {
+                                            if (isEditing) {
+                                                onSaveContent(artifact, editableContent)
+                                            }
+                                            isEditing = !isEditing
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(26.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+                                            contentDescription = "Править",
+                                            tint = ClaudeTerracotta,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isEditing) "Сохранить" else "Править",
+                                            fontSize = 11.sp,
+                                            color = ClaudeTerracotta
+                                        )
+                                    }
+
+                                    // Copy button
+                                    TextButton(
+                                        onClick = {
+                                            clipboardManager.setText(AnnotatedString(editableContent))
+                                            copiedToast = true
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(26.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
+                                            contentDescription = "Копировать",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (copiedToast) "Скопировано" else "Копировать",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
 
-                            // Copy button
-                            TextButton(
-                                onClick = {
-                                    clipboardManager.setText(AnnotatedString(editableContent))
-                                    copiedToast = true
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(26.dp)
+                            // Content Canvas (Monospaced styled box)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(ClaudeTerminalBackground)
+                                    .padding(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
-                                    contentDescription = "Copy",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (copiedToast) "Copied" else "Copy",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (isEditing) {
+                                    BasicTextField(
+                                        value = editableContent,
+                                        onValueChange = { editableContent = it },
+                                        textStyle = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 12.sp,
+                                            color = ClaudeTerminalForeground,
+                                            lineHeight = 18.sp
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    Text(
+                                        text = editableContent.ifEmpty { "(пусто)" },
+                                        style = TextStyle(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 12.sp,
+                                            color = ClaudeTerminalForeground,
+                                            lineHeight = 18.sp
+                                        )
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // Content Canvas (Monospaced styled box)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(ClaudeTerminalBackground)
-                            .padding(12.dp)
-                    ) {
-                        if (isEditing) {
-                            BasicTextField(
-                                value = editableContent,
-                                onValueChange = { editableContent = it },
-                                textStyle = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    color = ClaudeTerminalForeground,
-                                    lineHeight = 18.sp
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else {
-                            Text(
-                                text = editableContent.ifEmpty { "(empty)" },
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    color = ClaudeTerminalForeground,
-                                    lineHeight = 18.sp
-                                )
-                            )
-                        }
-                    }
-
-                    // Output Console (if command was executed)
-                    if (!artifact.executionOutput.isNullOrEmpty()) {
+                    // Output Console (if command was executed) — у плана и вопроса не показывается
+                    if (artifact.type != ArtifactType.PLAN && artifact.type != ArtifactType.QUESTION && !artifact.executionOutput.isNullOrEmpty()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -382,7 +538,7 @@ fun ClaudeArtifactCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "EXECUTION OUTPUT",
+                                    text = "ВЫВОД",
                                     style = TextStyle(
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 10.sp,
@@ -391,7 +547,7 @@ fun ClaudeArtifactCard(
                                     )
                                 )
                                 Text(
-                                    text = "exit: ${artifact.exitCode ?: 0}",
+                                    text = "код: ${artifact.exitCode ?: 0}",
                                     style = TextStyle(
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 10.sp,

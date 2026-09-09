@@ -411,6 +411,21 @@ fun FileManagerView(
                                 }
                             }
 
+                            // Edit content button — ручное редактирование файла пользователем
+                            if (!item.isDirectory) {
+                                IconButton(
+                                    onClick = { onOpenFile(item) },
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.EditNote,
+                                        contentDescription = "Редактировать содержимое",
+                                        tint = ClaudeTerracotta,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
                             // Rename button
                             IconButton(
                                 onClick = {
@@ -420,7 +435,7 @@ fun FileManagerView(
                                 modifier = Modifier.size(30.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Edit,
+                                    imageVector = Icons.Default.DriveFileRenameOutline,
                                     contentDescription = "Переименовать",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)

@@ -415,6 +415,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 refreshFiles()
             }
+            // Сохраняем правку и в самом артефакте, чтобы «Выполнить» не перезаписало файл старым содержимым
+            updateArtifactSuspend(artifact.copy(content = newContent))
         }
     }
 
@@ -800,6 +802,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Ответ пользователя на вопрос агента (как question-tool в opencode):
+     * ответ сохраняется в чат, и агент продолжает выполнение задачи.
+     */
+    fun answerAgentQuestion(artifact: Artifact, answer: String) {
+        val trimmed = answer.trim()
+        if (trimmed.isBlank() || _isGenerating.value) return
+        val conn = activeConnection.value ?: return
+
+        generationJob = viewModelScope.launch {
+            stopRequested = false
+
+            // Отмечаем вопрос отвеченным
+            updateArtifactSuspend(
+                artifact.copy(status = ArtifactStatus.SUCCESS, executionOutput = trimmed)
+            )
+
+            // Ответ пользователя — обычным сообщением в чат
+            chatDao.insertMessage(
+                MessageEntity(
+                    id = UUID.randomUUID().toString(),
+                    conversationId = _activeConversationId.value,
+                    role = MessageRole.USER.name,
+                    content = trimmed,
+                    artifactsJson = "[]"
+                )
+            )
+
+            runAgentLoop(
+                "Мой ответ на твой вопрос «${artifact.content}»: «$trimmed». Продолжай задачу с учётом ответа и не задавай этот вопрос повторно. Если задача полностью выполнена — подведи итог без артефактов.",
+                conn
+            )
+        }
+    }
+
+    /**
      * Цикл агента: запрос → ответ → выполнение артефактов → возврат результатов модели → ...
      * Агент НЕ останавливается, пока задача не выполнена полностью
      * (или пока пользователь не нажал «Стоп» / не исчерпан лимит итераций).
@@ -829,6 +866,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     break // Задача выполнена — модель ответила без артефактов
                 }
 
+                // Как в opencode: если агент задал вопрос — он ОБЯЗАН дождаться ответа пользователя.
+                // Цепочка возобновится через answerAgentQuestion().
+                val pendingQuestion = artifacts.firstOrNull { it.type == ArtifactType.QUESTION }
+                if (pendingQuestion != null) {
+                    break
+                }
+
                 val unauthorizedFolder = findUnauthorizedFolder(artifacts)
                 if (unauthorizedFolder != null) {
                     // Пауза на запрос SAF-разрешения; цепочка продолжится после выдачи разрешения
@@ -849,7 +893,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     if (stopRequested || _pendingFolderPermission.value != null) break
 
-                    val summary = buildExecutionSummary(executed.ifEmpty { artifacts })
+                    // План — информационный артефакт: если кроме него выполнять нечего, ход завершён
+                    val actionable = artifacts.filter { it.type != ArtifactType.PLAN }
+                    val forSummary = executed.ifEmpty { actionable }
+                    if (forSummary.isEmpty()) break
+
+                    val summary = buildExecutionSummary(forSummary)
                     insertSystemMessage(summary)
                     prompt = buildContinuationPrompt(summary)
                 } else {
@@ -1059,7 +1108,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Берём именно ПОСЛЕДНЕЕ сообщение ассистента: если после артефактов уже был
         // итоговый текстовый ответ — цепочка завершена и перезапускать её не нужно.
         val lastAssistant = messages.lastOrNull { it.role == MessageRole.ASSISTANT } ?: return
-        val arts = lastAssistant.artifacts
+        // План и вопрос — информационные артефакты, в проверке «всё ли выполнено» не участвуют
+        val arts = lastAssistant.artifacts.filter { it.type != ArtifactType.PLAN && it.type != ArtifactType.QUESTION }
         if (arts.isEmpty()) return
 
         val stillPending = arts.any {
@@ -1151,6 +1201,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 put("status", a.status.name)
                 put("exitCode", a.exitCode ?: -1)
                 put("executionOutput", a.executionOutput ?: "")
+                val planArr = JSONArray()
+                for (pi in a.planItems) {
+                    planArr.put(JSONObject().apply {
+                        put("content", pi.content)
+                        put("status", pi.status.name)
+                    })
+                }
+                put("planItems", planArr)
+                val optArr = JSONArray()
+                for (opt in a.questionOptions) {
+                    optArr.put(opt)
+                }
+                put("questionOptions", optArr)
             }
             array.put(obj)
         }
@@ -1165,6 +1228,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val exit = obj.optInt("exitCode", -1)
+
+                val planItems = mutableListOf<PlanItem>()
+                obj.optJSONArray("planItems")?.let { arr ->
+                    for (j in 0 until arr.length()) {
+                        val po = arr.optJSONObject(j) ?: continue
+                        val content = po.optString("content")
+                        if (content.isBlank()) continue
+                        val status = runCatching { PlanItemStatus.valueOf(po.optString("status", PlanItemStatus.PENDING.name)) }
+                            .getOrDefault(PlanItemStatus.PENDING)
+                        planItems.add(PlanItem(content, status))
+                    }
+                }
+
+                val questionOptions = mutableListOf<String>()
+                obj.optJSONArray("questionOptions")?.let { arr ->
+                    for (j in 0 until arr.length()) {
+                        val opt = arr.optString(j)
+                        if (opt.isNotBlank()) questionOptions.add(opt)
+                    }
+                }
+
                 result.add(
                     Artifact(
                         id = obj.getString("id"),
@@ -1178,7 +1262,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         dangerReason = obj.optString("dangerReason").ifEmpty { null },
                         status = ArtifactStatus.valueOf(obj.optString("status", ArtifactStatus.IDLE.name)),
                         exitCode = if (exit == -1) null else exit,
-                        executionOutput = obj.optString("executionOutput").ifEmpty { null }
+                        executionOutput = obj.optString("executionOutput").ifEmpty { null },
+                        planItems = planItems,
+                        questionOptions = questionOptions
                     )
                 )
             }

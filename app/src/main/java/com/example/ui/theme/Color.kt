@@ -3,13 +3,13 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // CodeStudio aesthetic — minimal and calm
-// Accent: pleasant light azure blue; darks: soft blue-tinted black
+// Accent: deep calm blue; darks: soft blue-tinted black
 // Light Theme: cool paper white, soft grey-blue surfaces, deep slate text
-val ClaudeTerracotta = Color(0xFF4C9BD4)
-val ClaudeTerracottaLight = Color(0xFF6FB4E4)
-val ClaudeTerracottaDark = Color(0xFF2F7BB0)
-val ClaudeTerracottaContainer = Color(0xFFE9F2FA)
-val ClaudeOnTerracottaContainer = Color(0xFF143A57)
+val ClaudeTerracotta = Color(0xFF2E6DB4)
+val ClaudeTerracottaLight = Color(0xFF5B93C9)
+val ClaudeTerracottaDark = Color(0xFF1F4E85)
+val ClaudeTerracottaContainer = Color(0xFFE4EDF8)
+val ClaudeOnTerracottaContainer = Color(0xFF0F2A47)
 
 val ClaudeBackgroundLight = Color(0xFFF7F9FB)
 val ClaudeSurfaceLight = Color(0xFFF1F4F8)
@@ -31,10 +31,10 @@ val ClaudeTextTertiaryDark = Color(0xFF7C8493)
 // Terminal & Artifact specific
 val ClaudeTerminalBackground = Color(0xFF101317)
 val ClaudeTerminalForeground = Color(0xFFD9E0E8)
-val ClaudeTerminalPrompt = Color(0xFF6FB4E4)
+val ClaudeTerminalPrompt = Color(0xFF5B93C9)
 val ClaudeSuccess = Color(0xFF4E9E77)
 val ClaudeWarning = Color(0xFFC99A4B)
 val ClaudeDanger = Color(0xFFD05A5A)
-val ClaudeCodeKeyword = Color(0xFF6FB4E4)
+val ClaudeCodeKeyword = Color(0xFF5B93C9)
 val ClaudeCodeString = Color(0xFF7FB069)
 val ClaudeCodeComment = Color(0xFF7C8493)

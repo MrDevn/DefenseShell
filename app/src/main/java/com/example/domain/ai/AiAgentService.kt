@@ -8,6 +8,8 @@ import com.example.data.model.ArtifactType
 import com.example.data.model.ChatMessage
 import com.example.data.model.CustomConnection
 import com.example.data.model.MessageRole
+import com.example.data.model.PlanItem
+import com.example.data.model.PlanItemStatus
 import com.example.domain.filesystem.FileSystemEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -490,6 +492,22 @@ pattern: .log
 title: Поиск log-файлов в домашней папке
 ```
 
+4. План многошаговой задачи (как в opencode). Для ЛЮБОЙ многошаговой задачи сначала создай план, а затем действуй. После получения результатов обновляй план: выполненное помечай [x], текущий шаг — [~]:
+```artifact:plan
+title: План задачи
+- [x] Выполненный шаг
+- [~] Шаг, который выполняется сейчас
+- [ ] Шаг ещё не начат
+```
+Для простых одношаговых задач план не нужен.
+
+5. Вопрос пользователю — ТОЛЬКО когда без его выбора или данных действительно нельзя продолжить:
+```artifact:question
+question: Текст вопроса
+options: Вариант 1, Вариант 2, Вариант 3
+```
+Приложение покажет вопрос пользователю, и он ОБЯЗАН ответить; ответ придёт следующим сообщением. Никогда не повторяй вопрос, на который уже получен ответ. Если вопросов нет — не генерируй artifact:question.
+
 Отвечай вежливо, кратко и структурированно на русском языке. Не используй эмодзи — только чистый текст и markdown.
 """.trimIndent()
     }
@@ -634,6 +652,99 @@ title: Поиск log-файлов в домашней папке
                         status = ArtifactStatus.IDLE
                     )
                 )
+            } else if (line.trim().startsWith("```artifact:plan")) {
+                val blockLines = mutableListOf<String>()
+                i++
+                while (i < lines.size && !lines[i].trim().startsWith("```")) {
+                    blockLines.add(lines[i])
+                    i++
+                }
+                if (i < lines.size) i++
+
+                var planTitle = "План агента"
+                val planItems = mutableListOf<PlanItem>()
+                for (bLine in blockLines) {
+                    val t = bLine.trim()
+                    if (t.isEmpty()) continue
+                    if (t.startsWith("title:")) {
+                        planTitle = t.removePrefix("title:").trim().ifBlank { planTitle }
+                        continue
+                    }
+                    var status = PlanItemStatus.PENDING
+                    val content = when {
+                        t.startsWith("- [x]", ignoreCase = true) || t.startsWith("[x]", ignoreCase = true) -> {
+                            status = PlanItemStatus.COMPLETED
+                            t.replaceFirst(Regex("^-?\\s*\\[[xX]]\\s*"), "")
+                        }
+                        t.startsWith("- [~]") || t.startsWith("[~]") || t.startsWith("- [>]") || t.startsWith("[>]") -> {
+                            status = PlanItemStatus.IN_PROGRESS
+                            t.replaceFirst(Regex("^-?\\s*\\[[~>]]\\s*"), "")
+                        }
+                        t.startsWith("- [ ]") || t.startsWith("[ ]") -> t.replaceFirst(Regex("^-?\\s*\\[ ]\\s*"), "")
+                        else -> t.replaceFirst(Regex("^([-*•]|\\d+[.)])\\s*"), "")
+                    }
+                    if (content.isNotBlank()) {
+                        planItems.add(PlanItem(content.trim(), status))
+                    }
+                }
+
+                if (planItems.isNotEmpty()) {
+                    artifacts.add(
+                        Artifact(
+                            id = UUID.randomUUID().toString(),
+                            title = planTitle,
+                            type = ArtifactType.PLAN,
+                            content = planItems.joinToString("\n") { p ->
+                                val mark = when (p.status) {
+                                    PlanItemStatus.COMPLETED -> "[x]"
+                                    PlanItemStatus.IN_PROGRESS -> "[~]"
+                                    PlanItemStatus.PENDING -> "[ ]"
+                                }
+                                "- $mark ${p.content}"
+                            },
+                            language = null,
+                            planItems = planItems,
+                            status = ArtifactStatus.IDLE
+                        )
+                    )
+                }
+            } else if (line.trim().startsWith("```artifact:question")) {
+                val blockLines = mutableListOf<String>()
+                i++
+                while (i < lines.size && !lines[i].trim().startsWith("```")) {
+                    blockLines.add(lines[i])
+                    i++
+                }
+                if (i < lines.size) i++
+
+                var questionText = ""
+                val options = mutableListOf<String>()
+                for (bLine in blockLines) {
+                    val t = bLine.trim()
+                    if (t.isEmpty()) continue
+                    when {
+                        t.startsWith("question:") -> questionText = t.removePrefix("question:").trim()
+                        t.startsWith("options:") -> options.addAll(
+                            t.removePrefix("options:").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotEmpty() }
+                        )
+                        t.startsWith("option:") -> options.add(t.removePrefix("option:").trim())
+                        else -> if (questionText.isEmpty()) questionText = t
+                    }
+                }
+
+                if (questionText.isNotEmpty()) {
+                    artifacts.add(
+                        Artifact(
+                            id = UUID.randomUUID().toString(),
+                            title = "Вопрос агента",
+                            type = ArtifactType.QUESTION,
+                            content = questionText,
+                            language = null,
+                            questionOptions = options,
+                            status = ArtifactStatus.IDLE
+                        )
+                    )
+                }
             } else {
                 cleanOutput.append(line).append("\n")
                 i++

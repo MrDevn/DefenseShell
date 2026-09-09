@@ -5,7 +5,9 @@ enum class ArtifactType {
     FILE_EDIT,
     TERMINAL_COMMAND,
     CODE_SNIPPET,
-    SYSTEM_INFO
+    SYSTEM_INFO,
+    PLAN,
+    QUESTION
 }
 
 enum class ArtifactStatus {
@@ -16,6 +18,20 @@ enum class ArtifactStatus {
     FAILED,
     REJECTED
 }
+
+/**
+ * Пункт плана агента (как todo-списки в opencode).
+ */
+enum class PlanItemStatus {
+    PENDING,
+    IN_PROGRESS,
+    COMPLETED
+}
+
+data class PlanItem(
+    val content: String,
+    val status: PlanItemStatus = PlanItemStatus.PENDING
+)
 
 data class Artifact(
     val id: String,
@@ -30,7 +46,9 @@ data class Artifact(
     val status: ArtifactStatus = ArtifactStatus.IDLE,
     val exitCode: Int? = null,
     val executionOutput: String? = null,
-    val isExpanded: Boolean = true
+    val isExpanded: Boolean = true,
+    val planItems: List<PlanItem> = emptyList(),
+    val questionOptions: List<String> = emptyList()
 ) {
     fun isExecutable(): Boolean = type == ArtifactType.TERMINAL_COMMAND || targetPath?.endsWith(".sh") == true || targetPath?.endsWith(".py") == true
 }
