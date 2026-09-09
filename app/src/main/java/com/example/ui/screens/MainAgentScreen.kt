@@ -998,7 +998,7 @@ fun ClaudeChatView(
                 modifier = Modifier
                     .widthIn(max = 430.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF1A1A1A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                 shadowElevation = 3.dp
@@ -1055,7 +1055,9 @@ fun ClaudeChatView(
                     ) {
                     IconButton(
                         onClick = onPickAttachments,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier
+                            .size(30.dp)
+                            .offset(x = 2.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
@@ -1113,9 +1115,9 @@ fun ClaudeChatView(
                         },
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
-                            .size(30.dp)
+                            .size(28.dp)
                             .offset(x = (-10).dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
                     ) {
@@ -1123,7 +1125,7 @@ fun ClaudeChatView(
                             imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                             contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                             tint = Color.White,
-                            modifier = Modifier.size(if (isGenerating) 18.dp else 16.dp)
+                            modifier = Modifier.size(if (isGenerating) 16.dp else 15.dp)
                         )
                     }
                     }
