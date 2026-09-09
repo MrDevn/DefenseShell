@@ -497,38 +497,6 @@ fun CustomConnectionDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Открыть каталог провайдеров")
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    providerIdInput = "OpenAI"
-                                    baseUrlInput = "https://api.openai.com/v1"
-                                    apiKeyInput = ""
-                                    modelIdInput = "gpt-4o-mini"
-                                    authHeaderFormatInput = "Bearer %s"
-                                    customHeadersInput = ""
-                                    bodyTemplateInput = ""
-                                    isEditingForm = true
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("OpenAI") }
-                            OutlinedButton(
-                                onClick = {
-                                    providerIdInput = "Gemini"
-                                    baseUrlInput = "https://generativelanguage.googleapis.com/v1beta"
-                                    apiKeyInput = ""
-                                    modelIdInput = "gemini-2.0-flash"
-                                    authHeaderFormatInput = "Bearer %s"
-                                    customHeadersInput = ""
-                                    bodyTemplateInput = ""
-                                    isEditingForm = true
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Gemini") }
-                        }
                     }
                 } else {
                     // Form for Custom Connection
@@ -806,6 +774,36 @@ fun CustomConnectionDialog(
             title = { Text("Каталог провайдеров", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
+                    Text(
+                        "Выберите готовый сервис. URL и модель подставятся автоматически.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        providerPresets.take(2).forEach { preset ->
+                            Surface(
+                                modifier = Modifier.weight(1f).clickable {
+                                    providerIdInput = preset.name
+                                    baseUrlInput = preset.url
+                                    modelIdInput = preset.model
+                                    apiKeyInput = ""
+                                    availableModels = emptyList()
+                                    testResultText = null
+                                    showProviderCatalog = false
+                                    isEditingForm = true
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (preset.name == "OpenAI") Color(0xFF202123) else Color(0xFF4285F4)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(preset.name, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("API-ключ", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = providerSearch,
                         onValueChange = { providerSearch = it },
