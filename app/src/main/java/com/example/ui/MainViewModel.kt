@@ -753,6 +753,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 grantedFolders.first { list -> list.any { it.id == granted.id } }
             }
 
+            // The waiting state keeps the Stop button visible while the system picker is open.
+            // Release it before starting the resumed agent coroutine.
+            _isGenerating.value = false
+
             val convId = _activeConversationId.value
 
             // Ищем сообщение модели с артефактами ДО вставки подтверждения,
@@ -789,6 +793,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onFolderPermissionDenied(targetPath: String?) {
         viewModelScope.launch {
             _pendingFolderPermission.value = null
+            _isGenerating.value = false
             val convId = _activeConversationId.value
             chatDao.insertMessage(
                 MessageEntity(
@@ -819,6 +824,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (_pendingDangerousArtifact.value?.id == artifact.id) {
                 _pendingDangerousArtifact.value = null
             }
+            _isGenerating.value = false
             maybeContinueAgentChain()
         }
     }
@@ -840,6 +846,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun executeArtifact(artifact: Artifact) {
         viewModelScope.launch {
             executeArtifactInternal(artifact)
+            _isGenerating.value = false
             // После выполнения — автоматически продолжаем цепочку агента, если все артефакты обработаны
             maybeContinueAgentChain()
         }
@@ -1063,10 +1070,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun answerAgentQuestion(artifact: Artifact, answer: String) {
         val trimmed = answer.trim()
-        if (trimmed.isBlank() || _isGenerating.value) return
+        if (trimmed.isBlank()) return
         val conn = activeConnection.value ?: return
 
         generationJob = viewModelScope.launch {
+            _isGenerating.value = false
             stopRequested = false
             startAgentForegroundService()
 
@@ -1105,6 +1113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         var prompt = initialPrompt
         var iteration = 0
+        var waitingForUser = false
         _isGenerating.value = true
         try {
             while (iteration < MAX_AGENT_ITERATIONS && !stopRequested) {
@@ -1135,6 +1144,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Цепочка возобновится через answerAgentQuestion().
                 val pendingQuestion = artifacts.firstOrNull { it.type == ArtifactType.QUESTION }
                 if (pendingQuestion != null) {
+                    waitingForUser = true
                     break
                 }
 
@@ -1142,6 +1152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (unauthorizedFolder != null) {
                     // Пауза на запрос SAF-разрешения; цепочка продолжится после выдачи разрешения
                     _pendingFolderPermission.value = unauthorizedFolder
+                    waitingForUser = true
                     break
                 }
 
@@ -1169,9 +1180,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     // SAFETY: артефакты выполняет пользователь из карточек; цепочка продолжится
                     // автоматически через maybeContinueAgentChain(), когда все будут обработаны.
+                    waitingForUser = true
                     val dangerous = artifacts.firstOrNull { it.isDangerous }
                     if (dangerous != null) {
                         _pendingDangerousArtifact.value = dangerous
+                        waitingForUser = true
                     }
                     break
                 }
@@ -1182,10 +1195,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: CancellationException) {
             // Остановлено пользователем — частичный ответ уже сохранён в requestModelTurn
         } finally {
-            _isGenerating.value = false
+            if (!waitingForUser) _isGenerating.value = false
             _agentStage.value = AgentStage.IDLE
             _thinkingText.value = ""
-            stopAgentForegroundService()
+            if (!waitingForUser) stopAgentForegroundService()
         }
     }
 
