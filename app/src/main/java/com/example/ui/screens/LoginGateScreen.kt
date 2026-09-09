@@ -26,7 +26,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.ClaudeDanger
-import com.example.ui.theme.ClaudeTerracotta
 import kotlinx.coroutines.launch
 
 /**
@@ -55,90 +54,100 @@ fun LoginGateScreen(
             .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Box(
             modifier = Modifier
-                .padding(32.dp)
-                .widthIn(max = 360.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 90.dp, y = (-70).dp)
+                .size(240.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .offset(x = (-90).dp, y = 90.dp)
+                .size(220.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        )
+
+        Surface(
+            modifier = Modifier
+                .padding(20.dp)
+                .widthIn(max = 420.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
+            ),
+            shadowElevation = 10.dp
         ) {
-            // Круглый логотип на экране входа (иконка лаунчера остаётся стандартной)
-            Image(
-                painter = painterResource(R.drawable.logo),
-                contentDescription = "CodeStudio",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(CircleShape)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "CodeStudio",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Автономный ИИ-агент: файлы, терминал и репозитории GitHub",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            Button(
-                onClick = { showTokenDialog = true },
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(46.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ClaudeTerracotta,
-                    contentColor = Color.White
-                )
+                    .padding(28.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Войти через GitHub", fontWeight = FontWeight.SemiBold)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedButton(
-                onClick = onGuest,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Image(
+                    painter = painterResource(R.drawable.logo),
+                    contentDescription = "CodeStudio",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(18.dp))
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Text(
-                    "Войти как гость",
-                    fontWeight = FontWeight.SemiBold,
+                    text = "Ваша среда.\nВаш AI-агент.",
+                    style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Файлы, терминал и GitHub в одном спокойном рабочем пространстве.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(30.dp))
+
+                Button(
+                    onClick = { showTokenDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(9.dp))
+                    Text("Продолжить с GitHub", fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = onGuest,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(9.dp))
+                    Text("Гостевой режим", fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(
+                    text = "GitHub нужен только для доступа к вашим репозиториям. Локальная работа доступна без входа.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    textAlign = TextAlign.Start
+                )
             }
-
-            Spacer(modifier = Modifier.height(22.dp))
-
-            Text(
-                text = "Гость — локальный агент без доступа к репозиториям.\nGitHub — просмотр и редактирование всех ваших репозиториев.",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    lineHeight = 15.sp
-                ),
-                textAlign = TextAlign.Center
-            )
         }
     }
 
@@ -202,7 +211,7 @@ fun LoginGateScreen(
                     },
                     enabled = !isBusy && tokenInput.isNotBlank(),
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     if (isBusy) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
@@ -216,7 +225,7 @@ fun LoginGateScreen(
                     Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(24.dp)
         )
     }
 }

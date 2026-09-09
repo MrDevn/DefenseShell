@@ -187,14 +187,14 @@ fun MainAgentScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.width(300.dp),
-                drawerContainerColor = MaterialTheme.colorScheme.surface
+                modifier = Modifier.width(312.dp),
+                drawerContainerColor = MaterialTheme.colorScheme.background
             ) {
                 // Drawer Header
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .padding(horizontal = 20.dp, vertical = 24.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Круглый логотип в меню
@@ -203,16 +203,14 @@ fun MainAgentScreen(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "CodeStudio",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -223,7 +221,7 @@ fun MainAgentScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     // New Session Button
                     Button(
@@ -234,11 +232,7 @@ fun MainAgentScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("new_chat_button"),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = ClaudeTerracotta,
-                            contentColor = Color.White
-                        )
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -250,7 +244,11 @@ fun MainAgentScreen(
                     // Pinned Directory Card
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -287,7 +285,7 @@ fun MainAgentScreen(
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
 
                 // Sessions List
                 Text(
@@ -310,8 +308,8 @@ fun MainAgentScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else Color.Transparent)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                                 .clickable {
                                     viewModel.selectConversation(conv.id)
                                     coroutineScope.launch { drawerState.close() }
@@ -327,14 +325,14 @@ fun MainAgentScreen(
                                 Icon(
                                     imageVector = Icons.Default.ChatBubbleOutline,
                                     contentDescription = null,
-                                    tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = conv.title,
                                     style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                     ),
                                     maxLines = 1
@@ -422,13 +420,13 @@ fun MainAgentScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.background)
                         .statusBarsPadding()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -449,21 +447,28 @@ fun MainAgentScreen(
 
                             Spacer(modifier = Modifier.width(6.dp))
 
-                            // Custom Connection Pill in Header
+                            Text(
+                                text = activeTab.label,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
                             Surface(
-                                shape = RoundedCornerShape(20.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) else ClaudeDanger.copy(alpha = 0.5f)
+                                    if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.55f) else ClaudeDanger.copy(alpha = 0.5f)
                                 ),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable { showCustomConnectionDialog = true }
                                     .testTag("connection_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -475,7 +480,7 @@ fun MainAgentScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (activeConnection != null) {
-                                            "${activeConnection!!.providerId} (${activeConnection!!.modelId})"
+                                            activeConnection!!.providerId
                                         } else {
                                             "Настроить API"
                                         },
@@ -498,12 +503,12 @@ fun MainAgentScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Path Badge / Pin
+                            // Compact working directory shortcut.
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable {
                                         activeTab = AppNavigationTab.FILES
                                     }
@@ -532,16 +537,15 @@ fun MainAgentScreen(
 
                             Spacer(modifier = Modifier.width(6.dp))
 
-                            // Agent Operation Mode Chip (Safety vs Extra) — крайний справа
                             Surface(
-                                shape = RoundedCornerShape(20.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
                                     if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                                 ),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable { showModeSelectionDialog = true }
                                     .testTag("mode_selector_chip")
                             ) {
@@ -569,29 +573,26 @@ fun MainAgentScreen(
                         }
                     }
 
-                    // Navigation Tab Row
-                    // Вкладка «Репо» видна только после входа через GitHub
                     val visibleTabs = AppNavigationTab.values().filter {
                         it != AppNavigationTab.REPOS || githubLogin != null
                     }
-                    // Ровные вкладки-квадратики со скруглёнными краями, без подписей
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         visibleTabs.forEach { tab ->
                             val selected = activeTab == tab
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(38.dp)
-                                    .clip(RoundedCornerShape(11.dp))
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(
-                                        if (selected) ClaudeTerracotta
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                                        else Color.Transparent
                                     )
                                     .clickable {
                                         activeTab = tab
@@ -602,17 +603,26 @@ fun MainAgentScreen(
                                     .testTag("tab_${tab.name}"),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label,
-                                    tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = tab.label,
+                                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                         thickness = 1.dp
                     )
                 }
@@ -892,8 +902,8 @@ fun ClaudeChatView(
                 modifier = Modifier
                     .fillMaxHeight()
                     .widthIn(max = 760.dp)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp)
             ) {
                 items(messages) { msg ->
                     ClaudeMessageRow(
@@ -914,14 +924,14 @@ fun ClaudeChatView(
                                     modifier = Modifier
                                         .size(24.dp)
                                         .clip(CircleShape)
-                                        .background(ClaudeTerracotta.copy(alpha = 0.15f)),
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (agentStage == AgentStage.THINKING) {
                                         Icon(
                                             imageVector = Icons.Default.Psychology,
                                             contentDescription = null,
-                                            tint = ClaudeTerracotta,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                             modifier = Modifier.size(15.dp)
                                         )
                                     } else {
@@ -996,16 +1006,16 @@ fun ClaudeChatView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(horizontal = 18.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 quickPrompts.forEach { suggestion ->
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onSendMessage(suggestion) }
                     ) {
                         Text(
@@ -1014,7 +1024,7 @@ fun ClaudeChatView(
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -1023,7 +1033,7 @@ fun ClaudeChatView(
 
         // Mode Status Bar
         Surface(
-            color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            color = if (operationMode == AgentOperationMode.EXTRA) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onOpenModeSelection() }
@@ -1074,20 +1084,20 @@ fun ClaudeChatView(
                 // Поднимаем поле ввода над клавиатурой (edge-to-edge: adjustResize не работает,
                 // поэтому явно учитываем IME insets вместе с navigation bar)
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             Surface(
                 modifier = Modifier
                     .widthIn(max = 760.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-                shadowElevation = 0.dp
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                shadowElevation = 3.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextField(
@@ -1095,7 +1105,7 @@ fun ClaudeChatView(
                         onValueChange = { promptInput = it },
                         placeholder = {
                             Text(
-                                text = "Сообщение для CodeStudio (файлы, скрипты, команды)...",
+                                text = "Спросите или опишите задачу...",
                                 style = TextStyle(
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -1139,8 +1149,8 @@ fun ClaudeChatView(
                         },
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta
                                 else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
@@ -1180,18 +1190,18 @@ fun ClaudeMessageRow(
             // Avatar badge
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(
                         if (isUser) MaterialTheme.colorScheme.surfaceVariant
-                        else ClaudeTerracotta.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.primaryContainer
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isUser) Icons.Default.Person else Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = if (isUser) MaterialTheme.colorScheme.onSurfaceVariant else ClaudeTerracotta,
+                    tint = if (isUser) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(16.dp)
                 )
             }
