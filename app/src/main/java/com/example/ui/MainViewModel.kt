@@ -203,6 +203,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return aiAgentService.testConnection(conn)
     }
 
+    suspend fun listModels(provider: String, apiKey: String): Result<List<String>> {
+        return aiAgentService.listModels(provider, apiKey)
+    }
+
     // -------------------------------------------------------------
     // Вход (гость / GitHub) и репозитории
     // -------------------------------------------------------------

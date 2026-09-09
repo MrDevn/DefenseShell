@@ -44,6 +44,7 @@ fun CustomConnectionDialog(
     onSaveConnection: (CustomConnection) -> Unit,
     onDeleteConnection: (String) -> Unit,
     onTestConnection: suspend (CustomConnection) -> Result<String>,
+    onLoadModels: suspend (String, String) -> Result<List<String>>,
     onDismiss: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -72,6 +73,9 @@ fun CustomConnectionDialog(
     var isTesting by remember { mutableStateOf(false) }
     var testResultText by remember { mutableStateOf<String?>(null) }
     var testIsSuccess by remember { mutableStateOf(false) }
+    var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isLoadingModels by remember { mutableStateOf(false) }
+    val isBuiltInProvider = providerIdInput == "OpenAI" || providerIdInput == "Gemini"
 
     fun populateFormForEdit(conn: CustomConnection?) {
         if (conn != null) {
@@ -489,7 +493,7 @@ fun CustomConnectionDialog(
                             .heightIn(max = 420.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        item {
+                        if (!isBuiltInProvider) item {
                             OutlinedTextField(
                                 value = providerIdInput,
                                 onValueChange = { providerIdInput = it },
@@ -500,7 +504,7 @@ fun CustomConnectionDialog(
                             )
                         }
 
-                        item {
+                        if (!isBuiltInProvider) item {
                             OutlinedTextField(
                                 value = baseUrlInput,
                                 onValueChange = { baseUrlInput = it },
@@ -515,8 +519,8 @@ fun CustomConnectionDialog(
                             OutlinedTextField(
                                 value = apiKeyInput,
                                 onValueChange = { apiKeyInput = it },
-                                label = { Text("api-key (Ключ авторизации)") },
-                                placeholder = { Text("sk-...") },
+                                    label = { Text(if (isBuiltInProvider) "API-ключ" else "api-key (Ключ авторизации)") },
+                                    placeholder = { Text(if (providerIdInput == "Gemini") "AIza..." else "sk-...") },
                                 singleLine = true,
                                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
@@ -531,7 +535,40 @@ fun CustomConnectionDialog(
                             )
                         }
 
-                        item {
+                        if (isBuiltInProvider && availableModels.isNotEmpty()) item {
+                            var expanded by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Модель: $modelIdInput")
+                                }
+                                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                    availableModels.forEach { model ->
+                                        DropdownMenuItem(
+                                            text = { Text(model) },
+                                            onClick = { modelIdInput = model; expanded = false }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isBuiltInProvider) item {
+                            OutlinedButton(
+                                onClick = {
+                                    isLoadingModels = true
+                                    coroutineScope.launch {
+                                        val result = onLoadModels(providerIdInput, apiKeyInput.trim())
+                                        isLoadingModels = false
+                                        availableModels = result.getOrDefault(emptyList())
+                                        if (availableModels.isEmpty()) testResultText = result.exceptionOrNull()?.message ?: "Модели не найдены"
+                                    }
+                                },
+                                enabled = apiKeyInput.isNotBlank() && !isLoadingModels,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (isLoadingModels) "Загрузка моделей..." else "Загрузить доступные модели") }
+                        }
+
+                        if (!isBuiltInProvider) item {
                             OutlinedTextField(
                                 value = modelIdInput,
                                 onValueChange = { modelIdInput = it },
@@ -563,7 +600,7 @@ fun CustomConnectionDialog(
                             }
                         }
 
-                        if (showAdvanced) {
+                        if (showAdvanced && !isBuiltInProvider) {
                             item {
                                 OutlinedTextField(
                                     value = authHeaderFormatInput,
@@ -629,7 +666,7 @@ fun CustomConnectionDialog(
                                         }
                                     }
                                 },
-                                enabled = !isTesting && baseUrlInput.isNotBlank() && modelIdInput.isNotBlank(),
+                                enabled = !isTesting && apiKeyInput.isNotBlank() && (isBuiltInProvider || (baseUrlInput.isNotBlank() && modelIdInput.isNotBlank())),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 if (isTesting) {
@@ -677,8 +714,8 @@ fun CustomConnectionDialog(
 
                                 Button(
                                     onClick = {
-                                        if (providerIdInput.isBlank() || baseUrlInput.isBlank() || modelIdInput.isBlank()) {
-                                            testResultText = "Заполните обязательные поля: provider-id, base-url, model-id"
+                                        if (apiKeyInput.isBlank() || (!isBuiltInProvider && (providerIdInput.isBlank() || baseUrlInput.isBlank() || modelIdInput.isBlank()))) {
+                                            testResultText = if (isBuiltInProvider) "Введите API-ключ" else "Заполните обязательные поля"
                                             testIsSuccess = false
                                             return@Button
                                         }

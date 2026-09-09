@@ -199,6 +199,7 @@ fun MainAgentScreen(
             onTestConnection = { conn ->
                 viewModel.testConnection(conn)
             },
+            onLoadModels = { provider, key -> viewModel.listModels(provider, key) },
             onDismiss = { showCustomConnectionDialog = false }
         )
     }

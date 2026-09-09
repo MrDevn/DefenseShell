@@ -322,6 +322,15 @@ class AiAgentService(
      */
     suspend fun testConnection(connection: CustomConnection): Result<String> = withContext(Dispatchers.IO) {
         try {
+            if (connection.providerId.equals("Gemini", ignoreCase = true)) {
+                val result = executeGeminiPrompt(
+                    prompt = "Respond with just OK.",
+                    connection = connection,
+                    attachments = emptyList(),
+                    onPartialText = null
+                )
+                return@withContext Result.success("Gemini подключён: ${result.responseText}")
+            }
             val url = connection.completionsUrl
             val messagesJson = JSONArray().apply {
                 put(JSONObject().apply {
@@ -373,6 +382,35 @@ class AiAgentService(
             }
         } catch (e: Exception) {
             Result.failure(Exception("Не удалось подключиться: ${e.localizedMessage ?: e.javaClass.simpleName}"))
+        }
+    }
+
+    suspend fun listModels(provider: String, apiKey: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().get().apply {
+                if (provider.equals("Gemini", ignoreCase = true)) {
+                    url("https://generativelanguage.googleapis.com/v1beta/models?key=${java.net.URLEncoder.encode(apiKey, "UTF-8")}")
+                } else {
+                    url("https://api.openai.com/v1/models")
+                    header("Authorization", "Bearer $apiKey")
+                }
+            }.build()
+            httpClient.newCall(request).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                if (!response.isSuccessful) return@withContext Result.failure(Exception("HTTP ${response.code}: $raw"))
+                val json = JSONObject(raw)
+                val data = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
+                val models = buildList {
+                    for (index in 0 until data.length()) {
+                        val model = data.optJSONObject(index) ?: continue
+                        val id = model.optString("id").ifBlank { model.optString("name").removePrefix("models/") }
+                        if (id.isNotBlank() && (provider.equals("OpenAI", true) || provider.equals("Gemini", true))) add(id)
+                    }
+                }
+                Result.success(models)
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
         }
     }
 
