@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.example.R
@@ -1075,18 +1077,9 @@ fun ClaudeChatView(
                         )
                     }
 
-                    TextField(
+                    BasicTextField(
                         value = promptInput,
                         onValueChange = { promptInput = it },
-                        placeholder = {
-                            Text(
-                                text = "Спросите или опишите задачу...",
-                                style = TextStyle(
-                                    fontSize = 13.sp,
-                                    color = Color.White.copy(alpha = 0.55f)
-                                )
-                            )
-                        },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(
                             onSend = {
@@ -1097,20 +1090,34 @@ fun ClaudeChatView(
                             }
                         ),
                         singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        ),
                         textStyle = TextStyle(
                             fontSize = 13.sp,
+                            lineHeight = 18.sp,
                             color = Color.White
                         ),
+                        cursorBrush = SolidColor(Color(0xFF3B82F6)),
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .testTag("chat_input_field")
+                            .testTag("chat_input_field"),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (promptInput.isEmpty()) {
+                                    Text(
+                                        text = "Спросите или опишите задачу...",
+                                        style = TextStyle(
+                                            fontSize = 13.sp,
+                                            lineHeight = 18.sp,
+                                            color = Color.White.copy(alpha = 0.55f)
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
                     )
                     }
                 }
@@ -1126,7 +1133,7 @@ fun ClaudeChatView(
                 },
                 enabled = isGenerating || promptInput.isNotBlank(),
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(25.9.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
                     .testTag("send_button")
