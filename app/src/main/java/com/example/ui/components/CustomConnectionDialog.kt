@@ -314,11 +314,11 @@ fun CustomConnectionDialog(
                         }
                     } else {
                         // Вкладка «Мои»: list of existing Custom connections
-                        if (connections.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
+                            if (connections.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(

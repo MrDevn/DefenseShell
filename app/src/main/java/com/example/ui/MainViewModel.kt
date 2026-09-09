@@ -159,20 +159,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 chatDao.insertConversation(conv)
                 _activeConversationId.value = newId
 
-                val welcomeMessage = MessageEntity(
-                    id = UUID.randomUUID().toString(),
-                    conversationId = newId,
-                    role = "ASSISTANT",
-                    content = """
-Привет! Я CodeStudio — автономный ИИ-агент с реальным доступом к файловой системе Android и терминалу.
-
-Подключение: нажмите на индикатор подключения вверху и добавьте свой API — `base-url`, `api-key` и `model-id`.
-
-Домашняя директория агента: `${_currentWorkingDir.value}`. Вы можете попросить меня найти, создать, отредактировать или удалить любые файлы, запустить shell-скрипт или автоматизировать задачу.
-""".trimIndent(),
-                    artifactsJson = "[]"
-                )
-                chatDao.insertMessage(welcomeMessage)
             } else {
                 _activeConversationId.value = convList.first().id
             }

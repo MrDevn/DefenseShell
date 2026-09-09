@@ -14,10 +14,5 @@ enum class AgentOperationMode(
         title = "Extra",
         badgeLabel = "Extra",
         description = "Полная автономность: действия выполняются автоматически от начала до конца в пределах разрешённых папок"
-    ),
-    JAILBREAK(
-        title = "JailBreak",
-        badgeLabel = "JailBreak",
-        description = "Без подтверждений и внутренних ограничений агента. Системные ограничения Android и правила API-провайдера сохраняются"
     )
 }

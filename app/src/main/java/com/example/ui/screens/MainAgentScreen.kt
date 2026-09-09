@@ -470,7 +470,7 @@ fun MainAgentScreen(
                             Text(
                                 text = activeTab.label,
                                 style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 6.dp)
+                                modifier = Modifier.padding(horizontal = 2.dp)
                             )
 
                             Spacer(modifier = Modifier.width(6.dp))
@@ -522,7 +522,10 @@ fun MainAgentScreen(
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
@@ -904,6 +907,34 @@ fun ClaudeChatView(
                     .padding(horizontal = 18.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp)
             ) {
+                if (messages.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillParentMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "Чем займёмся сегодня?",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Я готов, когда ты готов.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 items(messages) { msg ->
                     ClaudeMessageRow(
                         message = msg,
@@ -1149,6 +1180,7 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(38.dp)
+                            .offset(x = (-4).dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta

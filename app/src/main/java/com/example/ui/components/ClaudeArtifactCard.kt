@@ -67,7 +67,6 @@ fun ClaudeArtifactCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
-                    .clickable { isExpanded = !isExpanded }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -255,18 +254,6 @@ fun ClaudeArtifactCard(
                         Spacer(modifier = Modifier.width(4.dp))
                     }
 
-                    // Expand / Collapse Chevron
-                    IconButton(
-                        onClick = { isExpanded = !isExpanded },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Toggle Expand",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
                 }
             }
 
@@ -277,7 +264,7 @@ fun ClaudeArtifactCard(
             )
 
             // Artifact Body (Expanded)
-            AnimatedVisibility(visible = isExpanded) {
+            AnimatedVisibility(visible = true) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     when (artifact.type) {
                         ArtifactType.PLAN -> {
