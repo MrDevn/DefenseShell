@@ -995,7 +995,10 @@ fun ClaudeChatView(
             contentAlignment = Alignment.Center
         ) {
             Row(
-                modifier = Modifier.widthIn(max = 331.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .widthIn(max = 331.dp)
+                    .fillMaxWidth()
+                    .offset(x = (-2).dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -1094,6 +1097,7 @@ fun ClaudeChatView(
                             }
                         ),
                         singleLine = true,
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -1106,7 +1110,7 @@ fun ClaudeChatView(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .height(36.dp)
+                            .fillMaxHeight()
                             .testTag("chat_input_field")
                     )
                     }
@@ -1123,7 +1127,7 @@ fun ClaudeChatView(
                 },
                 enabled = isGenerating || promptInput.isNotBlank(),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
                     .testTag("send_button")
@@ -1132,7 +1136,7 @@ fun ClaudeChatView(
                     imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                     contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                     tint = Color.White,
-                    modifier = Modifier.size(if (isGenerating) 15.dp else 14.dp)
+                    modifier = Modifier.size(if (isGenerating) 14.dp else 13.dp)
                 )
             }
             }
