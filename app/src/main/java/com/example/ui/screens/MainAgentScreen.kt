@@ -1122,27 +1122,27 @@ fun ClaudeChatView(
                     }
                 }
             }
-            IconButton(
-                onClick = {
-                    if (isGenerating) {
-                        onStopGeneration()
-                    } else if (promptInput.isNotBlank()) {
-                        onSendMessage(promptInput)
-                        promptInput = ""
-                    }
-                },
-                enabled = isGenerating || promptInput.isNotBlank(),
+            Box(
                 modifier = Modifier
                     .size(20.8.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
-                    .testTag("send_button")
+                    .clickable(enabled = isGenerating || promptInput.isNotBlank()) {
+                        if (isGenerating) {
+                            onStopGeneration()
+                        } else {
+                            onSendMessage(promptInput)
+                            promptInput = ""
+                        }
+                    }
+                    .testTag("send_button"),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                     contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                     tint = Color.White,
-                    modifier = Modifier.size(if (isGenerating) 14.dp else 13.dp)
+                    modifier = Modifier.size(if (isGenerating) 12.dp else 11.dp)
                 )
             }
             }
