@@ -1098,7 +1098,7 @@ fun ClaudeChatView(
                         cursorBrush = SolidColor(Color(0xFF3B82F6)),
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
+                            .height(40.dp)
                             .testTag("chat_input_field"),
                         decorationBox = { innerTextField ->
                             Box(
@@ -1127,12 +1127,14 @@ fun ClaudeChatView(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
-                    .clickable(enabled = isGenerating || promptInput.isNotBlank()) {
-                        if (isGenerating) {
-                            onStopGeneration()
-                        } else {
-                            onSendMessage(promptInput)
+                    .clickable(
+                        enabled = isGenerating || promptInput.isNotBlank()
+                    ) {
+                        if (isGenerating) onStopGeneration()
+                        else if (promptInput.isNotBlank()) {
+                            val message = promptInput
                             promptInput = ""
+                            onSendMessage(message)
                         }
                     }
                     .testTag("send_button"),
