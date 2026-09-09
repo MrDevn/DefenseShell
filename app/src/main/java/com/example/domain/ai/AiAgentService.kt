@@ -349,7 +349,6 @@ class AiAgentService(
             obj.put("max_tokens", 600)
             obj.put("reasoning_effort", "low")
             obj.put("enable_thinking", false)
-            obj.put("thinking", false)
         }
         return obj.toString()
     }
