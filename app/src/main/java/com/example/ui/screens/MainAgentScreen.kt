@@ -547,7 +547,11 @@ fun MainAgentScreen(
                             Icon(Icons.Default.Menu, contentDescription = "Меню")
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = activeTab.label, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = activeTab.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.offset(x = (-2).dp)
+                        )
                         Spacer(modifier = Modifier.weight(1f))
                         Surface(
                             shape = CircleShape,
