@@ -446,49 +446,42 @@ fun MainAgentScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.Start
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                        IconButton(
+                            onClick = { coroutineScope.launch { drawerState.open() } },
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            IconButton(
-                                onClick = { coroutineScope.launch { drawerState.open() } },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Меню",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Icon(Icons.Default.Menu, contentDescription = "Меню")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = activeTab.label, style = MaterialTheme.typography.titleMedium)
+                    }
 
-                            Spacer(modifier = Modifier.width(6.dp))
-
-                            Text(
-                                text = activeTab.label,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            )
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                             Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { showCustomConnectionDialog = true }
+                                    .testTag("connection_selector_chip"),
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
                                     if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.55f) else ClaudeDanger.copy(alpha = 0.5f)
                                 ),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showCustomConnectionDialog = true }
-                                    .testTag("connection_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -509,7 +502,8 @@ fun MainAgentScreen(
                                             fontSize = 12.sp,
                                             color = if (activeConnection != null) MaterialTheme.colorScheme.onSurface else ClaudeDanger
                                         ),
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
@@ -520,12 +514,6 @@ fun MainAgentScreen(
                                     )
                                 }
                             }
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
@@ -539,7 +527,7 @@ fun MainAgentScreen(
                                     .testTag("mode_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -560,7 +548,6 @@ fun MainAgentScreen(
                                 }
                             }
                         }
-                    }
 
                     val visibleTabs = AppNavigationTab.values().filter {
                         it != AppNavigationTab.REPOS || githubLogin != null

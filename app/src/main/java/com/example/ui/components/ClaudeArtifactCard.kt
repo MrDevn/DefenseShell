@@ -41,7 +41,6 @@ fun ClaudeArtifactCard(
     onReject: (Artifact) -> Unit = {},
     onAnswerQuestion: (Artifact, String) -> Unit = { _, _ -> }
 ) {
-    var isExpanded by remember { mutableStateOf(artifact.isExpanded) }
     var isEditing by remember { mutableStateOf(false) }
     var editableContent by remember(artifact.content) { mutableStateOf(artifact.content) }
     val clipboardManager = LocalClipboardManager.current
@@ -444,7 +443,7 @@ fun ClaudeArtifactCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    .padding(horizontal = 12.dp, vertical = 2.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -515,7 +514,7 @@ fun ClaudeArtifactCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(ClaudeTerminalBackground)
-                                    .padding(12.dp)
+                                    .padding(10.dp)
                             ) {
                                 if (isEditing) {
                                     BasicTextField(

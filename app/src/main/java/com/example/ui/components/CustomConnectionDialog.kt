@@ -151,7 +151,7 @@ fun CustomConnectionDialog(
                         ConnectionTabPill(label = "GGUF", selected = selectedTab == 2) { selectedTab = 2 }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     if (SHOW_FREE_TAB && selectedTab == 1) {
                         // Вкладка Free: встроенные бесплатные модели, доступны всем без настройки
@@ -186,7 +186,7 @@ fun CustomConnectionDialog(
                                             onSaveConnection(FreePresets.toConnection(modelId))
                                             onDismiss()
                                         }
-                                        .padding(12.dp)
+                                             .padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -335,7 +335,7 @@ fun CustomConnectionDialog(
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 380.dp),
+                                    .heightIn(max = 330.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(connections) { conn ->
