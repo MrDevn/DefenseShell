@@ -289,7 +289,12 @@ class AiAgentService(
         onPartialText: ((String) -> Unit)?
     ): AgentExecutionResult {
         if (connection.apiKey.isBlank()) throw IllegalArgumentException("Для Gemini требуется API-ключ.")
-        val parts = JSONArray().put(JSONObject().put("text", prompt))
+        val imageInstruction = if (attachments.any { it.isImage }) {
+            "\n\nAnalyze the attached image content directly and answer from what you see in it."
+        } else {
+            ""
+        }
+        val parts = JSONArray().put(JSONObject().put("text", prompt + imageInstruction))
         attachments.filter { it.isImage }.forEach { attachment ->
             parts.put(JSONObject().put("inline_data", JSONObject()
                 .put("mime_type", attachment.mimeType)
@@ -439,7 +444,8 @@ class AiAgentService(
         return JSONArray().apply {
             put(JSONObject().apply {
                 put("type", "text")
-                put("text", textContext.ifBlank { "Опиши прикреплённые изображения." })
+                put("text", (textContext.ifBlank { "Опиши прикреплённые изображения." }) +
+                    "\n\nПроанализируй содержимое прикреплённых изображений напрямую по пикселям.")
             })
             images.forEach { attachment ->
                 val encoded = Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)

@@ -131,8 +131,9 @@ fun MainAgentScreen(
         val newAttachments = uris.mapNotNull { uri ->
             runCatching {
                 val resolver = context.contentResolver
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
                 val name = uri.lastPathSegment?.substringAfterLast('/') ?: "attachment"
+                val mime = resolver.getType(uri)?.takeUnless { it == "application/octet-stream" }
+                    ?: imageMimeTypeFromName(name)
                 val bytes = resolver.openInputStream(uri)?.use { stream ->
                     stream.readLimitedBytes(MAX_ATTACHMENT_BYTES)
                 } ?: return@runCatching null
@@ -1026,7 +1027,7 @@ fun ClaudeChatView(
                 Column {
                     if (attachments.isNotEmpty()) {
                         Row(
-                            modifier = Modifier.padding(start = 10.dp, top = 6.dp, end = 10.dp),
+                            modifier = Modifier.padding(start = 7.dp, top = 6.dp, end = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             attachments.forEach { attachment ->
@@ -1134,7 +1135,7 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(30.dp)
-                            .offset(x = (-3).dp)
+                            .offset(x = (-6).dp)
                             .clip(CircleShape)
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
@@ -1243,6 +1244,17 @@ private fun isSupportedTextAttachment(name: String, mimeType: String): Boolean {
         "txt", "md", "java", "kt", "kts", "xml", "json", "yaml", "yml", "html", "css",
         "js", "ts", "tsx", "jsx", "py", "sh", "c", "cpp", "h", "hpp", "gradle", "properties"
     )
+}
+
+private fun imageMimeTypeFromName(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+    "jpg", "jpeg" -> "image/jpeg"
+    "png" -> "image/png"
+    "webp" -> "image/webp"
+    "gif" -> "image/gif"
+    "bmp" -> "image/bmp"
+    "heic" -> "image/heic"
+    "heif" -> "image/heif"
+    else -> "application/octet-stream"
 }
 
 private fun java.io.InputStream.readLimitedBytes(limit: Int): ByteArray {
