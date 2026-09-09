@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +47,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 
 enum class AppNavigationTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -73,6 +73,7 @@ fun MainAgentScreen(
     var activeTab by remember { mutableStateOf(AppNavigationTab.CHAT) }
     var showCustomConnectionDialog by remember { mutableStateOf(false) }
     var showModeSelectionDialog by remember { mutableStateOf(false) }
+    var showConnectionNotice by remember { mutableStateOf(false) }
 
     val customConnections by viewModel.customConnections.collectAsStateWithLifecycle()
     val activeConnection by viewModel.activeConnection.collectAsStateWithLifecycle()
@@ -100,6 +101,16 @@ fun MainAgentScreen(
     val pendingFolderPermission by viewModel.pendingFolderPermission.collectAsStateWithLifecycle()
     val operationMode by viewModel.operationMode.collectAsStateWithLifecycle()
     val grantedFolders by viewModel.grantedFolders.collectAsStateWithLifecycle()
+
+    LaunchedEffect(activeConnection) {
+        if (activeConnection == null) {
+            showConnectionNotice = true
+            delay(7_000)
+            showConnectionNotice = false
+        } else {
+            showConnectionNotice = false
+        }
+    }
 
     // Activity Result Launcher for Storage Access Framework (SAF) folder picker
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -492,6 +503,33 @@ fun MainAgentScreen(
                         .background(MaterialTheme.colorScheme.background)
                         .statusBarsPadding()
                 ) {
+                    AnimatedVisibility(
+                        visible = showConnectionNotice && activeConnection == null,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                .clickable { showCustomConnectionDialog = true },
+                            shape = RoundedCornerShape(14.dp),
+                            color = ClaudeDanger.copy(alpha = 0.14f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ClaudeDanger.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = ClaudeDanger, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Подключение не настроено",
+                                    style = MaterialTheme.typography.labelMedium.copy(color = ClaudeDanger, fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1025,15 +1063,27 @@ fun ClaudeChatView(
                 modifier = Modifier
                     .widthIn(max = 680.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = CircleShape,
+                color = Color(0xFF1A1A1A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                 shadowElevation = 3.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(start = 4.dp, end = 5.dp, top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    IconButton(
+                        onClick = onPickAttachments,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Добавить вложение",
+                            tint = Color.White.copy(alpha = 0.78f),
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
                     TextField(
                         value = promptInput,
                         onValueChange = { promptInput = it },
@@ -1042,7 +1092,7 @@ fun ClaudeChatView(
                                 text = "Спросите или опишите задачу...",
                                 style = TextStyle(
                                     fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    color = Color.White.copy(alpha = 0.55f)
                                 )
                             )
                         },
@@ -1064,7 +1114,7 @@ fun ClaudeChatView(
                         ),
                         textStyle = TextStyle(
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = Color.White
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -1072,6 +1122,18 @@ fun ClaudeChatView(
                     )
 
                     Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = { },
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Голосовой ввод",
+                            tint = Color.White.copy(alpha = 0.72f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
                     IconButton(
                         onClick = {
@@ -1085,12 +1147,12 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(30.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(MaterialTheme.colorScheme.primary)
+                            .clip(CircleShape)
+                            .background(Color(0xFF3B82F6))
                             .testTag("send_button")
                     ) {
                         Icon(
-                            imageVector = if (isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                            imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                             contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                             tint = Color.White,
                             modifier = Modifier.size(if (isGenerating) 18.dp else 16.dp)
