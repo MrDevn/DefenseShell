@@ -548,6 +548,53 @@ fun MainAgentScreen(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = activeTab.label, style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showCustomConnectionDialog = true }
+                                .testTag("connection_selector_chip"),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.55f) else ClaudeDanger.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(if (activeConnection != null) ClaudeSuccess else ClaudeDanger)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (activeConnection != null) {
+                                        "${activeConnection!!.providerId} · ${activeConnection!!.modelId}"
+                                    } else {
+                                        "Настроить API"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 11.sp,
+                                        color = if (activeConnection != null) MaterialTheme.colorScheme.onSurface else ClaudeDanger
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
                     }
 
                     Row(
@@ -556,55 +603,8 @@ fun MainAgentScreen(
                             .padding(horizontal = 14.dp, vertical = 0.dp)
                             .offset(y = (-2).dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.End
                     ) {
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showCustomConnectionDialog = true }
-                                    .testTag("connection_selector_chip"),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (activeConnection != null) MaterialTheme.colorScheme.outline.copy(alpha = 0.55f) else ClaudeDanger.copy(alpha = 0.5f)
-                                ),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(if (activeConnection != null) ClaudeSuccess else ClaudeDanger)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (activeConnection != null) {
-                                            "${activeConnection!!.providerId} · ${activeConnection!!.modelId}"
-                                        } else {
-                                            "Настроить API"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 12.sp,
-                                            color = if (activeConnection != null) MaterialTheme.colorScheme.onSurface else ClaudeDanger
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                  color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
