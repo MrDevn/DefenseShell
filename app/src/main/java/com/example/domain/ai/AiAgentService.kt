@@ -343,7 +343,14 @@ class AiAgentService(
         obj.put("messages", messages)
         obj.put("stream", stream)
         obj.put("temperature", if (fast) 0.3 else 0.7)
-        if (fast) obj.put("max_tokens", 1200)
+        if (fast) {
+            // Providers use different names for disabling chain-of-thought. Sending all
+            // common hints is harmless for OpenAI-compatible servers that ignore unknown keys.
+            obj.put("max_tokens", 600)
+            obj.put("reasoning_effort", "low")
+            obj.put("enable_thinking", false)
+            obj.put("thinking", false)
+        }
         return obj.toString()
     }
 
@@ -501,9 +508,10 @@ class AiAgentService(
 """.trimIndent()
             AgentOperationMode.FAST -> """
 РЕЖИМ РАБОТЫ: FAST — БЫСТРЫЙ EXTRA
-Действуй автономно в пределах разрешённых директорий. Не трать время на длинные рассуждения и не объясняй очевидное.
-Отвечай кратко, сразу выполняй необходимые действия и возвращай только важный результат.
-Не задавай лишних вопросов и не генерируй артефакты, если задача уже выполнена.
+Действуй автономно в пределах разрешённых директорий. Не планируй простые задачи и не пиши длинные рассуждения.
+Для просьб вроде «скопируй», «перемести», «удали», «создай» сразу сгенерируй ОДИН нужный artifact:terminal и выполни действие.
+Не объясняй очевидное, не задавай лишних вопросов и не создавай artifact:plan для одной команды.
+После выполнения верни одну короткую строку с результатом.
 """.trimIndent()
             AgentOperationMode.SAFETY -> """
 РЕЖИМ РАБОТЫ: SAFETY — ПОДТВЕРЖДЕНИЕ КАЖДОГО ШАГА
@@ -511,6 +519,13 @@ class AiAgentService(
 Описывай свои шаги понятно и прозрачно.
 """.trimIndent()
         }
+
+        val fastTail = if (operationMode == AgentOperationMode.FAST) """
+
+КРИТИЧЕСКОЕ ПРАВИЛО FAST:
+Если запрос можно выполнить одной shell-командой, не рассуждай и не составляй план: сразу верни один artifact:terminal.
+Для копирования архива используй cp -f "источник" "назначение". Если путь внешнего хранилища не разрешён, запроси только необходимое разрешение через целевой путь.
+""".trimIndent() else ""
 
         return """
 Ты — CodeStudio, автономный ИИ-агент с реальным доступом к файловой системе Android устройства и терминалу.
@@ -585,6 +600,7 @@ options: Вариант 1, Вариант 2, Вариант 3
 Приложение покажет вопрос пользователю, и он ОБЯЗАН ответить; ответ придёт следующим сообщением. Никогда не повторяй вопрос, на который уже получен ответ. Если вопросов нет — не генерируй artifact:question.
 
 Отвечай вежливо, кратко и структурированно на русском языке. Не используй эмодзи — только чистый текст и markdown.
+$fastTail
 """.trimIndent()
     }
 
