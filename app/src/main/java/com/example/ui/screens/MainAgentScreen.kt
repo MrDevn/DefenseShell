@@ -306,6 +306,56 @@ fun MainAgentScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
 
+                Text(
+                    text = "РАЗДЕЛЫ",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 1.sp
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                )
+                val drawerTabs = AppNavigationTab.values().filter {
+                    it != AppNavigationTab.REPOS || githubLogin != null
+                }
+                drawerTabs.forEach { tab ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (activeTab == tab) MaterialTheme.colorScheme.primaryContainer
+                                else Color.Transparent
+                            )
+                            .clickable {
+                                activeTab = tab
+                                if (tab == AppNavigationTab.REPOS && githubRepos.isEmpty() && !githubBusy) {
+                                    viewModel.loadGitHubRepos()
+                                }
+                                coroutineScope.launch { drawerState.close() }
+                            }
+                            .testTag("tab_${tab.name}")
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = null,
+                            tint = if (activeTab == tab) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(19.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = tab.label,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = if (activeTab == tab) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (activeTab == tab) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                }
+
                 // Sessions List
                 Text(
                     text = "СЕССИИ",
@@ -548,54 +598,6 @@ fun MainAgentScreen(
                             }
                         }
 
-                    val visibleTabs = AppNavigationTab.values().filter {
-                        it != AppNavigationTab.REPOS || githubLogin != null
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        visibleTabs.forEach { tab ->
-                            val selected = activeTab == tab
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primaryContainer
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        activeTab = tab
-                                        if (tab == AppNavigationTab.REPOS && githubRepos.isEmpty() && !githubBusy) {
-                                            viewModel.loadGitHubRepos()
-                                        }
-                                    }
-                                    .testTag("tab_${tab.name}"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.label,
-                                        tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = tab.label,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                        color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                         thickness = 1.dp
@@ -1016,20 +1018,20 @@ fun ClaudeChatView(
                 // Поднимаем поле ввода над клавиатурой (edge-to-edge: adjustResize не работает,
                 // поэтому явно учитываем IME insets вместе с navigation bar)
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 760.dp)
+                    .widthIn(max = 680.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                 shadowElevation = 3.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+                    modifier = Modifier.padding(start = 10.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextField(
@@ -1053,6 +1055,7 @@ fun ClaudeChatView(
                                 }
                             }
                         ),
+                        singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -1081,13 +1084,9 @@ fun ClaudeChatView(
                         },
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
-                            .size(32.dp)
-                            .offset(x = (-8).dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(MaterialTheme.colorScheme.primary)
                             .testTag("send_button")
                     ) {
                         Icon(
