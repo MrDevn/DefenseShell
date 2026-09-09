@@ -996,7 +996,7 @@ fun ClaudeChatView(
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 430.dp)
+                    .widthIn(max = 380.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF1A1A1A),
@@ -1115,8 +1115,8 @@ fun ClaudeChatView(
                         },
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
-                            .size(28.dp)
-                            .offset(x = (-10).dp)
+                            .size(26.dp)
+                            .offset(x = (-7).dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
@@ -1125,7 +1125,7 @@ fun ClaudeChatView(
                             imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                             contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                             tint = Color.White,
-                            modifier = Modifier.size(if (isGenerating) 16.dp else 15.dp)
+                            modifier = Modifier.size(if (isGenerating) 15.dp else 14.dp)
                         )
                     }
                     }
