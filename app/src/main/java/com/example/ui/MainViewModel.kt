@@ -3,6 +3,7 @@ package com.example.ui
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.core.content.ContextCompat
+import com.example.AgentForegroundService
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -1021,6 +1024,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            startAgentForegroundService()
             runAgentLoop(prompt, activeConn, attachments)
         }
     }
@@ -1031,6 +1035,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopGeneration() {
         stopRequested = true
         generationJob?.cancel()
+        stopAgentForegroundService()
+    }
+
+    private fun startAgentForegroundService() {
+        val intent = Intent(getApplication(), AgentForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(getApplication(), intent)
+        } else {
+            getApplication<Application>().startService(intent)
+        }
+    }
+
+    private fun stopAgentForegroundService() {
+        getApplication<Application>().stopService(
+            Intent(getApplication(), AgentForegroundService::class.java)
+        )
     }
 
     /**
@@ -1044,6 +1064,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         generationJob = viewModelScope.launch {
             stopRequested = false
+            startAgentForegroundService()
 
             // Отмечаем вопрос отвеченным
             updateArtifactSuspend(
@@ -1160,6 +1181,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isGenerating.value = false
             _agentStage.value = AgentStage.IDLE
             _thinkingText.value = ""
+            stopAgentForegroundService()
         }
     }
 
