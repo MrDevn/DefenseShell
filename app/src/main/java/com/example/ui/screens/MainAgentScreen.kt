@@ -553,7 +553,8 @@ fun MainAgentScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 1.dp),
+                            .padding(horizontal = 14.dp, vertical = 0.dp)
+                            .offset(y = (-2).dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -1135,7 +1136,7 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(30.dp)
-                            .offset(x = (-8).dp)
+                            .offset(x = (-10).dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color(0xFF3B82F6))
                             .testTag("send_button")
