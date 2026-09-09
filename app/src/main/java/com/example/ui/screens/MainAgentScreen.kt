@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -51,6 +52,7 @@ enum class AppNavigationTab(val label: String, val icon: androidx.compose.ui.gra
     CHAT("Чат", Icons.Default.ChatBubbleOutline),
     TERMINAL("Терминал", Icons.Default.Terminal),
     FILES("Файлы", Icons.Default.FolderOpen),
+    REPOS("Репо", Icons.Default.Github),
     AUDIT_LOGS("Аудит", Icons.Default.History)
 }
 
@@ -87,6 +89,11 @@ fun MainAgentScreen(
     val activeArtifact by viewModel.activeArtifact.collectAsStateWithLifecycle()
     val agentStage by viewModel.agentStage.collectAsStateWithLifecycle()
     val thinkingText by viewModel.thinkingText.collectAsStateWithLifecycle()
+    val githubLogin by viewModel.githubLogin.collectAsStateWithLifecycle()
+    val githubRepos by viewModel.githubRepos.collectAsStateWithLifecycle()
+    val githubDownloaded by viewModel.githubDownloaded.collectAsStateWithLifecycle()
+    val githubStatus by viewModel.githubStatus.collectAsStateWithLifecycle()
+    val githubBusy by viewModel.githubBusy.collectAsStateWithLifecycle()
 
     val pendingFolderPermission by viewModel.pendingFolderPermission.collectAsStateWithLifecycle()
     val operationMode by viewModel.operationMode.collectAsStateWithLifecycle()
@@ -190,12 +197,16 @@ fun MainAgentScreen(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(ClaudeTerracotta),
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(ClaudeTerracottaLight, ClaudeTerracottaDark)
+                                    )
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Terminal,
+                                imageVector = Icons.Default.Code,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
@@ -565,8 +576,12 @@ fun MainAgentScreen(
                     }
 
                     // Navigation Tab Row
+                    // Вкладка «Репо» видна только после входа через GitHub
+                    val visibleTabs = AppNavigationTab.values().filter {
+                        it != AppNavigationTab.REPOS || githubLogin != null
+                    }
                     TabRow(
-                        selectedTabIndex = activeTab.ordinal,
+                        selectedTabIndex = visibleTabs.indexOf(activeTab).coerceAtLeast(0),
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = ClaudeTerracotta,
                         divider = {
@@ -576,10 +591,15 @@ fun MainAgentScreen(
                             )
                         }
                     ) {
-                        AppNavigationTab.values().forEach { tab ->
+                        visibleTabs.forEach { tab ->
                             Tab(
                                 selected = activeTab == tab,
-                                onClick = { activeTab = tab },
+                                onClick = {
+                                    activeTab = tab
+                                    if (tab == AppNavigationTab.REPOS && githubRepos.isEmpty() && !githubBusy) {
+                                        viewModel.loadGitHubRepos()
+                                    }
+                                },
                                 text = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
@@ -668,9 +688,31 @@ fun MainAgentScreen(
                             onCreateFile = { name, content -> viewModel.createNewFile(name, content) },
                             onCreateFolder = { name -> viewModel.createNewFolder(name) },
                             onRenameFile = { item, newName -> viewModel.renameFileItem(item, newName) },
+                            onMoveFile = { item, dest -> viewModel.moveFileItem(item, dest) },
                             onDeleteFile = { file -> viewModel.deleteFileItem(file) },
                             onPinCurrentDirectory = { dir -> viewModel.pinDirectory(dir) },
                             onRefresh = { viewModel.refreshFiles() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    AppNavigationTab.REPOS -> {
+                        ReposView(
+                            login = githubLogin ?: "",
+                            repos = githubRepos,
+                            downloadedNames = githubDownloaded,
+                            statusText = githubStatus,
+                            isLoading = githubBusy,
+                            onRefresh = { viewModel.loadGitHubRepos() },
+                            onDownload = { repo -> viewModel.downloadGitHubRepo(repo) },
+                            onPush = { repo -> viewModel.pushGitHubRepo(repo) },
+                            onOpen = { repo ->
+                                viewModel.openGitHubRepo(repo)
+                                activeTab = AppNavigationTab.FILES
+                            },
+                            onLogout = {
+                                viewModel.logoutGitHub()
+                                activeTab = AppNavigationTab.CHAT
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -766,6 +808,14 @@ fun ClaudeChatView(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // Автоскролл вниз, пока агент думает/пишет/выполняет — контент растёт, размер списка не меняется
+    val lastContentLength = messages.lastOrNull()?.content?.length ?: 0
+    LaunchedEffect(lastContentLength, thinkingText.length, agentStage, isGenerating) {
+        if (messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size)
         }
     }
 
@@ -885,6 +935,7 @@ fun ClaudeChatView(
                                 Text(
                                     text = when (agentStage) {
                                         AgentStage.CONNECTING -> "Подключение к API..."
+                                        AgentStage.RETRYING -> thinkingText.ifBlank { "Повторная попытка..." }
                                         AgentStage.THINKING -> "Thinking — анализ задачи..."
                                         AgentStage.RESPONDING -> "Генерация ответа..."
                                         AgentStage.EXECUTING -> "Выполнение действий..."
@@ -1090,11 +1141,8 @@ fun ClaudeChatView(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(
-                                when {
-                                    isGenerating -> ClaudeDanger
-                                    promptInput.isNotBlank() -> ClaudeTerracotta
-                                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                }
+                                if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                             )
                             .testTag("send_button")
                     ) {

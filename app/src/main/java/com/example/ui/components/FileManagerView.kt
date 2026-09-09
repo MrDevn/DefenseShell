@@ -42,6 +42,7 @@ fun FileManagerView(
     onCreateFile: (fileName: String, content: String) -> Unit,
     onCreateFolder: (folderName: String) -> Unit,
     onRenameFile: (item: FileSystemItem, newName: String) -> Unit,
+    onMoveFile: (item: FileSystemItem, destinationDir: String) -> Unit = { _, _ -> },
     onDeleteFile: (FileSystemItem) -> Unit,
     onPinCurrentDirectory: (String) -> Unit,
     onRefresh: () -> Unit,
@@ -54,6 +55,8 @@ fun FileManagerView(
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var renameTargetItem by remember { mutableStateOf<FileSystemItem?>(null) }
     var deleteConfirmItem by remember { mutableStateOf<FileSystemItem?>(null) }
+    var moveTargetItem by remember { mutableStateOf<FileSystemItem?>(null) }
+    var moveDestInput by remember { mutableStateOf("") }
 
     var newFileName by remember { mutableStateOf("") }
     var newFileContent by remember { mutableStateOf("") }
@@ -426,6 +429,22 @@ fun FileManagerView(
                                 }
                             }
 
+                            // Move button — переместить файл/папку в другую директорию
+                            IconButton(
+                                onClick = {
+                                    moveTargetItem = item
+                                    moveDestInput = currentPath
+                                },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DriveFileMove,
+                                    contentDescription = "Переместить",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
                             // Rename button
                             IconButton(
                                 onClick = {
@@ -514,6 +533,76 @@ fun FileManagerView(
                     Text("Отмена")
                 }
             }
+        )
+    }
+
+    // Move dialog — выбор папки назначения
+    if (moveTargetItem != null) {
+        AlertDialog(
+            onDismissRequest = { moveTargetItem = null },
+            title = { Text("Переместить", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Куда переместить «${moveTargetItem!!.name}»:",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = moveDestInput,
+                        onValueChange = { moveDestInput = it },
+                        label = { Text("Путь к папке назначения") },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "Быстрый выбор:",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        standardShortcuts.forEach { (label, path) ->
+                            AssistChip(
+                                onClick = { moveDestInput = path },
+                                label = { Text(label, fontSize = 10.sp) }
+                            )
+                        }
+                        grantedFolders.forEach { folder ->
+                            AssistChip(
+                                onClick = { moveDestInput = folder.folderPath },
+                                label = { Text(folder.displayName, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val dest = moveDestInput.trim()
+                        if (dest.isNotEmpty()) {
+                            onMoveFile(moveTargetItem!!, dest)
+                            moveTargetItem = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                ) {
+                    Text("Переместить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { moveTargetItem = null }) {
+                    Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            shape = RoundedCornerShape(16.dp)
         )
     }
 

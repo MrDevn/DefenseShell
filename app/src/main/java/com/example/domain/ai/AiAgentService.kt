@@ -14,12 +14,14 @@ import com.example.domain.filesystem.FileSystemEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -60,7 +62,8 @@ class AiAgentService(
         operationMode: AgentOperationMode = AgentOperationMode.SAFETY,
         grantedFolders: List<GrantedFolderEntity> = emptyList(),
         onPartialText: ((String) -> Unit)? = null,
-        onPartialReasoning: ((String) -> Unit)? = null
+        onPartialReasoning: ((String) -> Unit)? = null,
+        onRetry: ((Int, Long) -> Unit)? = null
     ): AgentExecutionResult = withContext(Dispatchers.IO) {
         if (connection.baseUrl.isBlank()) {
             throw IllegalArgumentException("Ошибка: не указан base-url для подключения '${connection.providerId}'. Укажите корректный адрес API.")
@@ -142,27 +145,63 @@ class AiAgentService(
 
         val request = requestBuilder.build()
 
+        // Retry: при сетевых ошибках и HTTP 429/5xx повторяем запрос
+        // с нарастающей задержкой — 1с, 3с, 5с, 7с, 9с
+        val retryDelaysSec = listOf(1L, 3L, 5L, 7L, 9L)
+        var attempt = 0
+        var response: Response? = null
+
+        while (true) {
+            ensureActive()
+            if (attempt > 0) {
+                val delaySec = retryDelaysSec[attempt - 1]
+                onRetry?.invoke(attempt, delaySec)
+                delay(delaySec * 1000L)
+            }
+            val call = httpClient.newCall(request)
+            // Отмена HTTP-запроса при остановке генерации пользователем
+            coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
+            try {
+                val resp = call.execute()
+                if (!resp.isSuccessful) {
+                    val code = resp.code
+                    if ((code == 429 || code in 500..599) && attempt < retryDelaysSec.size) {
+                        val errBody = resp.body?.string() ?: ""
+                        resp.close()
+                        attempt++
+                        continue
+                    }
+                    val errorBody = resp.body?.string() ?: "(пустой ответ)"
+                    resp.close()
+                    throw IllegalStateException(parseApiError(code, errorBody))
+                }
+                response = resp
+                break
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IllegalStateException) {
+                throw e
+            } catch (e: Exception) {
+                if (attempt < retryDelaysSec.size) {
+                    attempt++
+                    continue
+                }
+                ensureActive()
+                throw IllegalStateException("Сетевая ошибка при запросе к ${connection.cleanBaseUrl}: ${e.localizedMessage ?: e.javaClass.simpleName}. Проверьте доступность API и интернет-соединение.")
+            }
+        }
+
         val fullResponseText = StringBuilder()
         val fullReasoningText = StringBuilder()
         var isSseStream = false
 
         try {
-            val call = httpClient.newCall(request)
-            // Отмена HTTP-запроса при остановке генерации пользователем
-            coroutineContext[Job]?.invokeOnCompletion { call.cancel() }
+            val activeResponse = response ?: throw IllegalStateException("Нет ответа от сервера")
 
-            val response = call.execute()
-
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: "(пустой ответ)"
-                val parsedErrorMsg = parseApiError(response.code, errorBody)
-                throw IllegalStateException(parsedErrorMsg)
-            }
-
-            val contentType = response.header("Content-Type", "") ?: ""
+            val contentType = activeResponse.header("Content-Type", "") ?: ""
             isSseStream = contentType.contains("text/event-stream") || contentType.contains("stream")
 
-            val responseBody = response.body ?: throw IllegalStateException("Сервер вернул пустой ответ (HTTP ${response.code})")
+            val responseBody = activeResponse.body ?: throw IllegalStateException("Сервер вернул пустой ответ (HTTP ${activeResponse.code})")
 
             val reader = BufferedReader(InputStreamReader(responseBody.byteStream(), Charsets.UTF_8))
 

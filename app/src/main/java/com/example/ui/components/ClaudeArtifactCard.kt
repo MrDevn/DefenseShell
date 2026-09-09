@@ -440,29 +440,31 @@ fun ClaudeArtifactCard(
                                 )
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Edit toggle
-                                    TextButton(
-                                        onClick = {
-                                            if (isEditing) {
-                                                onSaveContent(artifact, editableContent)
-                                            }
-                                            isEditing = !isEditing
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(26.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
-                                            contentDescription = "Править",
-                                            tint = ClaudeTerracotta,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (isEditing) "Сохранить" else "Править",
-                                            fontSize = 11.sp,
-                                            color = ClaudeTerracotta
-                                        )
+                                    // Edit toggle — только для артефактов с реальным файлом
+                                    if (artifact.targetPath != null) {
+                                        TextButton(
+                                            onClick = {
+                                                if (isEditing) {
+                                                    onSaveContent(artifact, editableContent)
+                                                }
+                                                isEditing = !isEditing
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                            modifier = Modifier.height(26.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+                                                contentDescription = "Править",
+                                                tint = ClaudeTerracotta,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (isEditing) "Сохранить" else "Править",
+                                                fontSize = 11.sp,
+                                                color = ClaudeTerracotta
+                                            )
+                                        }
                                     }
 
                                     // Copy button

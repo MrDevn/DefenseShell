@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
@@ -16,6 +17,7 @@ import com.example.data.model.*
 import com.example.domain.ai.AgentExecutionResult
 import com.example.domain.ai.AiAgentService
 import com.example.domain.filesystem.FileSystemEngine
+import com.example.domain.github.GitHubService
 import com.example.domain.terminal.TerminalEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -213,6 +215,158 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // -------------------------------------------------------------
+    // Вход (гость / GitHub) и репозитории
+    // -------------------------------------------------------------
+
+    private val authPrefs = application.getSharedPreferences("codestudio_auth", Context.MODE_PRIVATE)
+    private val gitHubService = GitHubService()
+
+    private val _entryMode = MutableStateFlow(authPrefs.getString("entry_mode", null))
+    val entryMode: StateFlow<String?> = _entryMode.asStateFlow()
+
+    private val _githubLogin = MutableStateFlow(authPrefs.getString("github_login", null))
+    val githubLogin: StateFlow<String?> = _githubLogin.asStateFlow()
+
+    private var githubToken: String? = authPrefs.getString("github_token", null)
+
+    private val _githubRepos = MutableStateFlow<List<GitHubRepo>>(emptyList())
+    val githubRepos: StateFlow<List<GitHubRepo>> = _githubRepos.asStateFlow()
+
+    private val _githubDownloaded = MutableStateFlow<Set<String>>(emptySet())
+    val githubDownloaded: StateFlow<Set<String>> = _githubDownloaded.asStateFlow()
+
+    private val _githubStatus = MutableStateFlow<String?>(null)
+    val githubStatus: StateFlow<String?> = _githubStatus.asStateFlow()
+
+    private val _githubBusy = MutableStateFlow(false)
+    val githubBusy: StateFlow<Boolean> = _githubBusy.asStateFlow()
+
+    val gitHubReposRoot: File
+        get() = File(fileSystemEngine.agentHomeDir, "repos")
+
+    fun loginAsGuest() {
+        authPrefs.edit().putString("entry_mode", "guest").apply()
+        _entryMode.value = "guest"
+    }
+
+    suspend fun loginWithGitHub(token: String): Result<String> {
+        return try {
+            val login = gitHubService.validateToken(token)
+            if (login == null) {
+                Result.failure(Exception("Токен недействителен или GitHub недоступен. Нужен Personal Access Token с правом repo."))
+            } else {
+                authPrefs.edit()
+                    .putString("entry_mode", "github")
+                    .putString("github_token", token)
+                    .putString("github_login", login)
+                    .apply()
+                githubToken = token
+                _githubLogin.value = login
+                _entryMode.value = "github"
+                Result.success(login)
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(e.localizedMessage ?: e.javaClass.simpleName))
+        }
+    }
+
+    fun logoutGitHub() {
+        authPrefs.edit()
+            .remove("github_token")
+            .remove("github_login")
+            .remove("entry_mode")
+            .apply()
+        githubToken = null
+        _githubLogin.value = null
+        _entryMode.value = null
+        _githubRepos.value = emptyList()
+        _githubStatus.value = null
+    }
+
+    fun loadGitHubRepos() {
+        val token = githubToken ?: return
+        viewModelScope.launch {
+            _githubBusy.value = true
+            _githubStatus.value = "Загрузка репозиториев..."
+            try {
+                _githubRepos.value = gitHubService.listRepos(token)
+                refreshDownloadedRepos()
+                _githubStatus.value = null
+            } catch (e: Exception) {
+                _githubStatus.value = e.message ?: "Ошибка загрузки репозиториев"
+            } finally {
+                _githubBusy.value = false
+            }
+        }
+    }
+
+    fun refreshDownloadedRepos() {
+        val root = gitHubReposRoot
+        _githubDownloaded.value = if (root.exists()) {
+            root.listFiles()?.filter { it.isDirectory }?.map { it.name }?.toSet() ?: emptySet()
+        } else {
+            emptySet()
+        }
+    }
+
+    fun downloadGitHubRepo(repo: GitHubRepo) {
+        val token = githubToken ?: return
+        viewModelScope.launch {
+            _githubBusy.value = true
+            _githubStatus.value = "Скачивание ${repo.fullName}..."
+            try {
+                val dest = gitHubService.downloadRepo(token, repo, File(gitHubReposRoot, repo.name))
+                refreshDownloadedRepos()
+                refreshFiles()
+                _githubStatus.value = "${repo.fullName} скачан в ${dest.absolutePath}"
+            } catch (e: Exception) {
+                _githubStatus.value = e.message ?: "Ошибка скачивания"
+            } finally {
+                _githubBusy.value = false
+            }
+        }
+    }
+
+    fun pushGitHubRepo(repo: GitHubRepo) {
+        val token = githubToken ?: return
+        viewModelScope.launch {
+            _githubBusy.value = true
+            _githubStatus.value = "Отправка изменений ${repo.fullName}..."
+            try {
+                val result = gitHubService.pushRepo(
+                    token = token,
+                    repo = repo,
+                    dir = File(gitHubReposRoot, repo.name),
+                    commitMessage = "CodeStudio: обновление файлов"
+                )
+                _githubStatus.value = when {
+                    result.isEmpty && result.errors.isEmpty() -> "${repo.name}: изменений нет"
+                    else -> buildString {
+                        append(repo.name).append(": ")
+                        val parts = mutableListOf<String>()
+                        if (result.created > 0) parts.add("создано ${result.created}")
+                        if (result.updated > 0) parts.add("обновлено ${result.updated}")
+                        if (result.deleted > 0) parts.add("удалено ${result.deleted}")
+                        if (result.errors.isNotEmpty()) parts.add("ошибок ${result.errors.size}")
+                        append(parts.joinToString(", "))
+                    }
+                }
+            } catch (e: Exception) {
+                _githubStatus.value = e.message ?: "Ошибка отправки изменений"
+            } finally {
+                _githubBusy.value = false
+            }
+        }
+    }
+
+    fun openGitHubRepo(repo: GitHubRepo) {
+        val dir = File(gitHubReposRoot, repo.name)
+        if (dir.exists()) {
+            navigateToDirectory(dir.absolutePath)
+        }
+    }
+
+    // -------------------------------------------------------------
     // Real File Operations & Navigation
     // -------------------------------------------------------------
 
@@ -350,6 +504,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun moveFileItem(item: FileSystemItem, destinationDir: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val source = File(item.path)
+            val destDir = File(destinationDir)
+
+            // Сначала быстрый rename (в пределах одной ФС), при неудаче — копирование + удаление
+            var success = fileSystemEngine.moveItem(item.path, destinationDir)
+            if (!success && source.exists() && destDir.isDirectory) {
+                success = try {
+                    val target = File(destDir, source.name)
+                    val copied = if (source.isDirectory) {
+                        source.copyRecursively(target, overwrite = true)
+                    } else {
+                        source.copyTo(target, overwrite = true)
+                        true
+                    }
+                    if (copied) source.deleteRecursively() else false
+                } catch (e: Exception) {
+                    false
+                }
+            }
+
+            fileLogDao.insertFileLog(
+                FileLogEntity(
+                    operation = "MOVE",
+                    path = item.path,
+                    details = if (success) {
+                        "Перемещено '${item.name}' в '$destinationDir'"
+                    } else {
+                        "Не удалось переместить '${item.name}' в '$destinationDir'"
+                    },
+                    status = if (success) "SUCCESS" else "FAILED"
+                )
+            )
+
+            if (success && _currentWorkingDir.value.startsWith(item.path)) {
+                navigateToDirectory(destinationDir)
+            } else {
+                refreshFiles()
+            }
+        }
+    }
+
     fun undoFileLog(log: FileLogEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             if (!log.backupContent.isNullOrBlank()) {
@@ -369,6 +566,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openFileAsArtifact(item: FileSystemItem) {
         viewModelScope.launch(Dispatchers.IO) {
+            val ext = item.extension.lowercase()
+
+            // Бинарные файлы (фото, архивы, медиа) нельзя открывать текстовым редактором —
+            // чтение мегабайтов байтов в строку и рендер раньше вешали UI
+            val binaryExtensions = setOf(
+                "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "heic",
+                "mp3", "wav", "flac", "ogg", "m4a", "aac",
+                "mp4", "mkv", "avi", "mov", "webm",
+                "zip", "rar", "7z", "tar", "gz", "bz2", "xz",
+                "apk", "aab", "dex", "so", "jar", "class",
+                "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+                "ttf", "otf", "woff", "woff2", "jks", "keystore", "db", "sqlite"
+            )
+            if (ext in binaryExtensions) {
+                showInfoCard(
+                    "Файл не открыт",
+                    "«${item.name}» — бинарный файл ($ext). Текстовый редактор поддерживает только текстовые файлы."
+                )
+                return@launch
+            }
+            if (item.sizeBytes > 2 * 1024 * 1024) {
+                showInfoCard(
+                    "Файл слишком большой",
+                    "«${item.name}» (${item.formattedSize}) превышает лимит редактора 2 МБ."
+                )
+                return@launch
+            }
+
             try {
                 val content = fileSystemEngine.readFile(item.path)
                 val artifact = Artifact(
@@ -377,7 +602,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     type = ArtifactType.FILE_EDIT,
                     targetPath = item.path,
                     content = content,
-                    language = when (item.extension.lowercase()) {
+                    language = when (ext) {
                         "py" -> "python"
                         "sh", "bash" -> "bash"
                         "json" -> "json"
@@ -390,9 +615,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _activeArtifact.value = artifact
             } catch (e: Exception) {
-                e.printStackTrace()
+                showInfoCard(
+                    "Не удалось открыть файл",
+                    "«${item.name}»: ${e.message ?: e.javaClass.simpleName}"
+                )
             }
         }
+    }
+
+    private fun showInfoCard(title: String, text: String) {
+        _activeArtifact.value = Artifact(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            type = ArtifactType.SYSTEM_INFO,
+            content = text,
+            language = null,
+            status = ArtifactStatus.IDLE
+        )
     }
 
     fun setActiveArtifact(artifact: Artifact?) {
@@ -960,6 +1199,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Этап "Thinking" — модель анализирует задачу перед ответом
                     _agentStage.value = AgentStage.THINKING
                     _thinkingText.value = reasoningText
+                },
+                onRetry = { attemptNo, delaySec ->
+                    // Провайдер не ответил — повтор с нарастающей задержкой
+                    _agentStage.value = AgentStage.RETRYING
+                    _thinkingText.value = "Провайдер не отвечает — повторная попытка #$attemptNo через ${delaySec} с..."
                 },
                 onPartialText = { streamedText ->
                     lastPartialText = streamedText

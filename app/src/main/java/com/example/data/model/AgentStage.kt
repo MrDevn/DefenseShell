@@ -6,6 +6,7 @@ package com.example.data.model
 enum class AgentStage {
     IDLE,
     CONNECTING,
+    RETRYING,
     THINKING,
     RESPONDING,
     EXECUTING
