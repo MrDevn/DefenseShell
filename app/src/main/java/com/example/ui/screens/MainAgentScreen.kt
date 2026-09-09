@@ -530,7 +530,7 @@ fun MainAgentScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Agent Operation Mode Chip (Safety vs Extra) — крайний справа
                             Surface(
