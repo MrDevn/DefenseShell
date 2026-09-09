@@ -35,6 +35,41 @@ import kotlinx.coroutines.launch
 // Вернуть вкладку: поставить true.
 private const val SHOW_FREE_TAB = false
 
+private data class ProviderPreset(
+    val name: String,
+    val url: String,
+    val model: String,
+    val category: String
+)
+
+private val providerPresets = listOf(
+    ProviderPreset("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini", "Официальные"),
+    ProviderPreset("Gemini", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.0-flash", "Официальные"),
+    ProviderPreset("Anthropic", "https://api.anthropic.com/v1", "claude-3-5-sonnet-latest", "Официальные"),
+    ProviderPreset("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat", "Популярные"),
+    ProviderPreset("Mistral", "https://api.mistral.ai/v1", "mistral-small-latest", "Популярные"),
+    ProviderPreset("Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "Быстрые"),
+    ProviderPreset("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", "Агрегаторы"),
+    ProviderPreset("Together AI", "https://api.together.xyz/v1", "meta-llama/Llama-3.3-70B-Instruct-Turbo", "Агрегаторы"),
+    ProviderPreset("Fireworks AI", "https://api.fireworks.ai/inference/v1", "accounts/fireworks/models/llama-v3p1-70b-instruct", "Агрегаторы"),
+    ProviderPreset("Cerebras", "https://api.cerebras.ai/v1", "llama-3.3-70b", "Быстрые"),
+    ProviderPreset("xAI", "https://api.x.ai/v1", "grok-3-mini", "Официальные"),
+    ProviderPreset("Cohere", "https://api.cohere.com/compatibility/v1", "command-r-plus", "Популярные"),
+    ProviderPreset("Perplexity", "https://api.perplexity.ai", "sonar", "Поиск"),
+    ProviderPreset("NVIDIA NIM", "https://integrate.api.nvidia.com/v1", "meta/llama-3.1-70b-instruct", "Агрегаторы"),
+    ProviderPreset("SambaNova", "https://api.sambanova.ai/v1", "Meta-Llama-3.1-70B-Instruct", "Быстрые"),
+    ProviderPreset("AI21", "https://api.ai21.com/studio/v1", "jamba-1.5-mini", "Популярные"),
+    ProviderPreset("Novita AI", "https://api.novita.ai/v3/openai", "meta-llama/llama-3.1-70b-instruct", "Агрегаторы"),
+    ProviderPreset("白鲸 (SiliconFlow)", "https://api.siliconflow.cn/v1", "Qwen/Qwen2.5-72B-Instruct", "Агрегаторы"),
+    ProviderPreset("Kimi (Moonshot)", "https://api.moonshot.cn/v1", "moonshot-v1-8k", "Популярные"),
+    ProviderPreset("Qwen (DashScope)", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", "Популярные"),
+    ProviderPreset("Zhipu AI", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "Популярные"),
+    ProviderPreset("百度千帆", "https://qianfan.baidubce.com/v2", "ernie-4.0-8k", "Популярные"),
+    ProviderPreset("LM Studio", "http://10.0.2.2:1234/v1", "local-model", "Локальные"),
+    ProviderPreset("Ollama", "http://10.0.2.2:11434/v1", "llama3.2", "Локальные"),
+    ProviderPreset("llama.cpp", "http://10.0.2.2:8080/v1", "local-model", "Локальные")
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomConnectionDialog(
@@ -75,6 +110,8 @@ fun CustomConnectionDialog(
     var testIsSuccess by remember { mutableStateOf(false) }
     var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLoadingModels by remember { mutableStateOf(false) }
+    var showProviderCatalog by remember { mutableStateOf(false) }
+    var providerSearch by remember { mutableStateOf("") }
     val isBuiltInProvider = providerIdInput == "OpenAI" || providerIdInput == "Gemini"
 
     fun populateFormForEdit(conn: CustomConnection?) {
@@ -452,6 +489,14 @@ fun CustomConnectionDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Добавить подключение")
                         }
+                        OutlinedButton(
+                            onClick = { showProviderCatalog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Открыть каталог провайдеров")
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -754,6 +799,62 @@ fun CustomConnectionDialog(
             }
         }
     )
+
+    if (showProviderCatalog) {
+        AlertDialog(
+            onDismissRequest = { showProviderCatalog = false },
+            title = { Text("Каталог провайдеров", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = providerSearch,
+                        onValueChange = { providerSearch = it },
+                        label = { Text("Поиск провайдера") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(providerPresets.filter { preset ->
+                            providerSearch.isBlank() || preset.name.contains(providerSearch, true) || preset.category.contains(providerSearch, true)
+                        }) { preset ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    providerIdInput = preset.name
+                                    baseUrlInput = preset.url
+                                    modelIdInput = preset.model
+                                    apiKeyInput = ""
+                                    authHeaderFormatInput = "Bearer %s"
+                                    customHeadersInput = "{}"
+                                    bodyTemplateInput = ""
+                                    availableModels = emptyList()
+                                    testResultText = null
+                                    showProviderCatalog = false
+                                    isEditingForm = true
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            ) {
+                                Column(modifier = Modifier.padding(11.dp)) {
+                                    Text(preset.name, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "${preset.category} • ${preset.model}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showProviderCatalog = false }) { Text("Закрыть") } }
+        )
+    }
 }
 
 @Composable
