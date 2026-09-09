@@ -1097,7 +1097,6 @@ fun ClaudeChatView(
                             }
                         ),
                         singleLine = true,
-                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
