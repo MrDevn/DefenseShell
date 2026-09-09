@@ -9,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Github
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -61,7 +60,7 @@ fun ReposView(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Github,
+                    imageVector = Icons.Default.CloudQueue,
                     contentDescription = null,
                     tint = ClaudeTerracotta,
                     modifier = Modifier.size(17.dp)
@@ -167,7 +166,7 @@ fun ReposView(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = if (repo.isPrivate) Icons.Default.Lock else Icons.Default.Github,
+                                    imageVector = if (repo.isPrivate) Icons.Default.Lock else Icons.Default.CloudQueue,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)

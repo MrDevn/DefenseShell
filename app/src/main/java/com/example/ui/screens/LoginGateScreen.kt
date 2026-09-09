@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Github
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -107,7 +106,7 @@ fun LoginGateScreen(
                     contentColor = Color.White
                 )
             ) {
-                Icon(Icons.Default.Github, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Войти через GitHub", fontWeight = FontWeight.SemiBold)
             }

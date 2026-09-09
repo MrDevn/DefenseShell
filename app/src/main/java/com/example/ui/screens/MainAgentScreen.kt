@@ -52,7 +52,7 @@ enum class AppNavigationTab(val label: String, val icon: androidx.compose.ui.gra
     CHAT("Чат", Icons.Default.ChatBubbleOutline),
     TERMINAL("Терминал", Icons.Default.Terminal),
     FILES("Файлы", Icons.Default.FolderOpen),
-    REPOS("Репо", Icons.Default.Github),
+    REPOS("Репо", Icons.Default.CloudQueue),
     AUDIT_LOGS("Аудит", Icons.Default.History)
 }
 
