@@ -1124,7 +1124,7 @@ fun ClaudeChatView(
             }
             Box(
                 modifier = Modifier
-                    .size(20.8.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF3B82F6))
                     .clickable(enabled = isGenerating || promptInput.isNotBlank()) {
@@ -1142,7 +1142,7 @@ fun ClaudeChatView(
                     imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
                     contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
                     tint = Color.White,
-                    modifier = Modifier.size(if (isGenerating) 12.dp else 11.dp)
+                    modifier = Modifier.size(if (isGenerating) 18.dp else 17.dp)
                 )
             }
             }
