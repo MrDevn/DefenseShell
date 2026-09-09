@@ -996,7 +996,7 @@ fun ClaudeChatView(
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 380.dp)
+                    .widthIn(max = 430.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF1A1A1A),
@@ -1050,7 +1050,9 @@ fun ClaudeChatView(
                         )
                     }
                     Row(
-                        modifier = Modifier.padding(start = 4.dp, end = 5.dp, top = 2.dp, bottom = 2.dp),
+                        modifier = Modifier
+                            .height(30.dp)
+                            .padding(start = 4.dp, end = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                     IconButton(
@@ -1101,6 +1103,7 @@ fun ClaudeChatView(
                         ),
                         modifier = Modifier
                             .weight(1f)
+                            .height(28.dp)
                             .testTag("chat_input_field")
                     )
 
