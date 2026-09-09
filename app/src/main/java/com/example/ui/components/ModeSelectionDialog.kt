@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -79,6 +80,18 @@ fun ModeSelectionDialog(
                     subtitle = "Подтверждение каждого шага",
                     description = "Перед созданием файлов или запуском команд агент показывает детали операции и ждет вашего нажатия «Выполнить» или «Отклонить».",
                     onClick = { selectedMode = AgentOperationMode.SAFETY }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ModeOptionCard(
+                    mode = AgentOperationMode.JAILBREAK,
+                    isSelected = selectedMode == AgentOperationMode.JAILBREAK,
+                    icon = Icons.Default.WarningAmber,
+                    title = "JailBreak",
+                    subtitle = "Без защиты CodeStudio",
+                    description = "Отключает подтверждения и внутренние ограничения выполнения. Используйте только если полностью понимаете риск команд модели.",
+                    onClick = { selectedMode = AgentOperationMode.JAILBREAK }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))

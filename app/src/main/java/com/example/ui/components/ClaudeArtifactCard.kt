@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ fun ClaudeArtifactCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize()
             .clip(shape)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f), shape),
         colors = CardDefaults.cardColors(
@@ -279,13 +281,30 @@ fun ClaudeArtifactCard(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     when (artifact.type) {
                         ArtifactType.PLAN -> {
-                            // План агента (как в opencode): чек-лист со статусами шагов
+                            val completed = artifact.planItems.count { it.status == PlanItemStatus.COMPLETED }
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
+                                if (artifact.planItems.isNotEmpty()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Прогресс", style = MaterialTheme.typography.labelMedium)
+                                        Text("$completed / ${artifact.planItems.size}", style = MaterialTheme.typography.labelMedium, color = ClaudeTerracotta)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    LinearProgressIndicator(
+                                        progress = { completed.toFloat() / artifact.planItems.size },
+                                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                        color = ClaudeTerracotta,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
                                 if (artifact.planItems.isEmpty() && artifact.content.isNotBlank()) {
                                     Text(
                                         text = artifact.content,
@@ -346,20 +365,32 @@ fun ClaudeArtifactCard(
                                     )
                                 )
                                 if (artifact.status == ArtifactStatus.IDLE || artifact.status == ArtifactStatus.AWAITING_CONFIRMATION) {
-                                    artifact.questionOptions.forEach { opt ->
-                                        OutlinedButton(
+                                    artifact.questionOptions.forEachIndexed { index, opt ->
+                                        Surface(
                                             onClick = { onAnswerQuestion(artifact, opt) },
                                             modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
                                         ) {
+                                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(shape = RoundedCornerShape(7.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                                                    Text(
+                                                        text = "${index + 1}",
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
                                             Text(
                                                 text = opt,
-                                                fontSize = 12.sp,
+                                                fontSize = 13.sp,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 textAlign = TextAlign.Start,
-                                                modifier = Modifier.fillMaxWidth()
+                                                modifier = Modifier.weight(1f)
                                             )
+                                            }
                                         }
                                     }
                                     Row(

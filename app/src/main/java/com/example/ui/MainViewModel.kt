@@ -781,7 +781,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (lastAssistantMsg != null && lastAssistantMsg.artifacts.isNotEmpty()) {
                 for (artifact in lastAssistantMsg.artifacts) {
                     if (artifact.status == ArtifactStatus.IDLE && artifact.isAgentExecutable()) {
-                        if (_operationMode.value == AgentOperationMode.EXTRA || !artifact.isDangerous) {
+                        if (_operationMode.value != AgentOperationMode.SAFETY || !artifact.isDangerous) {
                             executeArtifactInternal(artifact)
                             if (_pendingFolderPermission.value != null) break
                         }
@@ -975,9 +975,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Real Chat Messaging (Streaming & Error Handling)
     // -------------------------------------------------------------
 
-    fun sendMessage(userPrompt: String) {
-        if (userPrompt.isBlank() || _isGenerating.value) return
+    fun sendMessage(userPrompt: String, attachments: List<ChatAttachment> = emptyList()) {
+        if ((userPrompt.isBlank() && attachments.isEmpty()) || _isGenerating.value) return
         val prompt = userPrompt.trim()
+        val storedPrompt = buildString {
+            append(prompt.ifBlank { "Посмотри прикреплённые материалы." })
+            if (attachments.isNotEmpty()) {
+                append("\n\nПрикреплено: ")
+                append(attachments.joinToString { it.name })
+            }
+        }
 
         generationJob = viewModelScope.launch {
             val convId = _activeConversationId.value
@@ -989,7 +996,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     id = UUID.randomUUID().toString(),
                     conversationId = convId,
                     role = MessageRole.USER.name,
-                    content = prompt,
+                    content = storedPrompt,
                     artifactsJson = "[]"
                 )
             )
@@ -999,7 +1006,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (existingMsgs.size <= 2) {
                 val conv = chatDao.getConversationById(convId)
                 if (conv != null) {
-                    val titleSnippet = if (prompt.length > 28) prompt.take(28) + "..." else prompt
+                val titleSnippet = if (storedPrompt.length > 28) storedPrompt.take(28) + "..." else storedPrompt
                     chatDao.insertConversation(conv.copy(title = titleSnippet, updatedAt = System.currentTimeMillis()))
                 }
             }
@@ -1028,7 +1035,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            runAgentLoop(prompt, activeConn)
+            runAgentLoop(prompt, activeConn, attachments)
         }
     }
 
@@ -1080,14 +1087,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Агент НЕ останавливается, пока задача не выполнена полностью
      * (или пока пользователь не нажал «Стоп» / не исчерпан лимит итераций).
      */
-    private suspend fun runAgentLoop(initialPrompt: String, conn: CustomConnection) {
+    private suspend fun runAgentLoop(
+        initialPrompt: String,
+        conn: CustomConnection,
+        initialAttachments: List<ChatAttachment> = emptyList()
+    ) {
         var prompt = initialPrompt
         var iteration = 0
         _isGenerating.value = true
         try {
             while (iteration < MAX_AGENT_ITERATIONS && !stopRequested) {
                 iteration++
-                val result = requestModelTurn(prompt, conn) ?: break
+                val result = requestModelTurn(
+                    prompt,
+                    conn,
+                    if (iteration == 0) initialAttachments else emptyList()
+                ) ?: break
                 val artifacts = result.artifacts
 
                 if (artifacts.isEmpty()) {
@@ -1119,7 +1134,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     break
                 }
 
-                if (_operationMode.value == AgentOperationMode.EXTRA) {
+                if (_operationMode.value != AgentOperationMode.SAFETY) {
                     // EXTRA: автономное выполнение всех действий и возврат результатов модели
                     _agentStage.value = AgentStage.EXECUTING
                     val executed = mutableListOf<Artifact>()
@@ -1166,7 +1181,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Одна итерация запроса к модели: стримит Thinking (рассуждения) и ответ, сохраняет сообщение.
      * Возвращает null при ошибке или остановке пользователем.
      */
-    private suspend fun requestModelTurn(prompt: String, conn: CustomConnection): AgentExecutionResult? {
+    private suspend fun requestModelTurn(
+        prompt: String,
+        conn: CustomConnection,
+        attachments: List<ChatAttachment> = emptyList()
+    ): AgentExecutionResult? {
         val convId = _activeConversationId.value
         val assistantMsgId = UUID.randomUUID().toString()
 
@@ -1195,6 +1214,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 conversationHistory = currentMessages.value,
                 operationMode = _operationMode.value,
                 grantedFolders = grantedFolders.value,
+                attachments = attachments,
                 onPartialReasoning = { reasoningText ->
                     // Этап "Thinking" — модель анализирует задачу перед ответом
                     _agentStage.value = AgentStage.THINKING
@@ -1365,7 +1385,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val anySuccess = arts.any { it.status == ArtifactStatus.SUCCESS }
         val anyFailure = arts.any { it.status == ArtifactStatus.FAILED }
-        val isExtra = _operationMode.value == AgentOperationMode.EXTRA
+        val isExtra = _operationMode.value != AgentOperationMode.SAFETY
         // Safety: продолжаем, только если хоть что-то реально выполнено успешно;
         // Extra: продолжаем и после ошибок, чтобы агент исправил их сам.
         if (!anySuccess && !(isExtra && anyFailure)) return

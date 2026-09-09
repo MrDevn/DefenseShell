@@ -1,11 +1,13 @@
 package com.example.domain.ai
 
+import android.util.Base64
 import com.example.data.db.entities.GrantedFolderEntity
 import com.example.data.model.AgentOperationMode
 import com.example.data.model.Artifact
 import com.example.data.model.ArtifactStatus
 import com.example.data.model.ArtifactType
 import com.example.data.model.ChatMessage
+import com.example.data.model.ChatAttachment
 import com.example.data.model.CustomConnection
 import com.example.data.model.MessageRole
 import com.example.data.model.PlanItem
@@ -61,6 +63,7 @@ class AiAgentService(
         conversationHistory: List<ChatMessage>,
         operationMode: AgentOperationMode = AgentOperationMode.SAFETY,
         grantedFolders: List<GrantedFolderEntity> = emptyList(),
+        attachments: List<ChatAttachment> = emptyList(),
         onPartialText: ((String) -> Unit)? = null,
         onPartialReasoning: ((String) -> Unit)? = null,
         onRetry: ((Int, Long) -> Unit)? = null
@@ -99,7 +102,7 @@ class AiAgentService(
         // Add current prompt
         messagesJson.put(JSONObject().apply {
             put("role", "user")
-            put("content", prompt)
+            put("content", buildUserContent(prompt, attachments))
         })
 
         // Build Request Body
@@ -343,6 +346,34 @@ class AiAgentService(
         return obj.toString()
     }
 
+    private fun buildUserContent(prompt: String, attachments: List<ChatAttachment>): Any {
+        if (attachments.isEmpty()) return prompt
+
+        val textContext = buildString {
+            append(prompt)
+            attachments.filterNot { it.isImage }.forEach { attachment ->
+                append("\n\n--- Файл: ${attachment.name} ---\n")
+                append(attachment.bytes.toString(Charsets.UTF_8))
+            }
+        }
+        val images = attachments.filter { it.isImage }
+        if (images.isEmpty()) return textContext
+
+        return JSONArray().apply {
+            put(JSONObject().apply {
+                put("type", "text")
+                put("text", textContext.ifBlank { "Опиши прикреплённые изображения." })
+            })
+            images.forEach { attachment ->
+                val encoded = Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)
+                put(JSONObject().apply {
+                    put("type", "image_url")
+                    put("image_url", JSONObject().put("url", "data:${attachment.mimeType};base64,$encoded"))
+                })
+            }
+        }
+    }
+
     private fun extractDeltaFromChunk(json: JSONObject): String {
         // 1. OpenAI / OpenRouter / DeepSeek format
         val choices = json.optJSONArray("choices")
@@ -461,14 +492,18 @@ class AiAgentService(
             grantedFolders.joinToString("\n") { "- ${it.folderPath} (${it.displayName})" }
         }
 
-        val modeInstructions = if (operationMode == AgentOperationMode.EXTRA) {
-            """
+        val modeInstructions = when (operationMode) {
+            AgentOperationMode.EXTRA -> """
 РЕЖИМ РАБОТЫ: EXTRA — ПОЛНАЯ АВТОНОМНОСТЬ
 В этом режиме твои действия выполняются АВТОМАТИЧЕСКИ без пошагового запроса подтверждения у пользователя (в пределах разрешённых директорий).
 Генерируй все необходимые команды и файлы для полного выполнения задачи от начала до конца.
 """.trimIndent()
-        } else {
-            """
+            AgentOperationMode.JAILBREAK -> """
+РЕЖИМ РАБОТЫ: JAILBREAK — БЕЗ ВНУТРЕННИХ ОГРАНИЧЕНИЙ
+Приложение автоматически выполняет действия без подтверждений и не накладывает собственных ограничений на команды агента.
+Точно следуй запросу пользователя и самостоятельно доводи задачу до результата. Не утверждай, что можешь обойти системные ограничения Android или правила API-провайдера.
+""".trimIndent()
+            AgentOperationMode.SAFETY -> """
 РЕЖИМ РАБОТЫ: SAFETY — ПОДТВЕРЖДЕНИЕ КАЖДОГО ШАГА
 В этом режиме перед каждым выполнением действия пользователь видит параметры и нажимает «Выполнить».
 Описывай свои шаги понятно и прозрачно.

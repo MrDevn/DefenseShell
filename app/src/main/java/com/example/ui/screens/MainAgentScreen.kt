@@ -50,6 +50,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 enum class AppNavigationTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     CHAT("Чат", Icons.Default.ChatBubbleOutline),
@@ -110,6 +111,25 @@ fun MainAgentScreen(
             viewModel.onFolderPermissionGranted(uri, pendingFolderPermission)
         } else {
             viewModel.dismissFolderPermission()
+        }
+    }
+    var pendingAttachments by remember { mutableStateOf<List<ChatAttachment>>(emptyList()) }
+    var attachmentError by remember { mutableStateOf<String?>(null) }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        pendingAttachments = uris.take(4).mapNotNull { uri ->
+            runCatching {
+                val resolver = context.contentResolver
+                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "attachment"
+                val bytes = resolver.openInputStream(uri)?.use { stream ->
+                    stream.readLimitedBytes(MAX_ATTACHMENT_BYTES)
+                } ?: return@runCatching null
+                val supported = mime.startsWith("image/") || isSupportedTextAttachment(name, mime)
+                require(supported) { "Формат $name не поддерживается" }
+                ChatAttachment(name, mime, bytes)
+            }.onFailure { attachmentError = it.message }.getOrNull()
         }
     }
 
@@ -468,7 +488,7 @@ fun MainAgentScreen(
                                     .testTag("connection_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -480,7 +500,7 @@ fun MainAgentScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = if (activeConnection != null) {
-                                            activeConnection!!.providerId
+                                            "${activeConnection!!.providerId} · ${activeConnection!!.modelId}"
                                         } else {
                                             "Настроить API"
                                         },
@@ -503,40 +523,6 @@ fun MainAgentScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Compact working directory shortcut.
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        activeTab = AppNavigationTab.FILES
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = ClaudeTerracotta,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = workingDir.substringAfterLast("/").ifEmpty { "Хранилище" },
-                                        style = TextStyle(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
@@ -550,7 +536,7 @@ fun MainAgentScreen(
                                     .testTag("mode_selector_chip")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -645,7 +631,15 @@ fun MainAgentScreen(
                             thinkingText = thinkingText,
                             onOpenModeSelection = { showModeSelectionDialog = true },
                             onOpenConnectionSettings = { showCustomConnectionDialog = true },
-                            onSendMessage = { prompt -> viewModel.sendMessage(prompt) },
+                            attachments = pendingAttachments,
+                            attachmentError = attachmentError,
+                            onPickAttachments = { attachmentPicker.launch(arrayOf("image/*", "text/*", "application/json", "application/xml", "application/octet-stream")) },
+                            onRemoveAttachment = { attachment -> pendingAttachments = pendingAttachments - attachment },
+                            onDismissAttachmentError = { attachmentError = null },
+                            onSendMessage = { prompt ->
+                                viewModel.sendMessage(prompt, pendingAttachments)
+                                pendingAttachments = emptyList()
+                            },
                             onStopGeneration = { viewModel.stopGeneration() },
                             onAnswerQuestion = { artifact, answer -> viewModel.answerAgentQuestion(artifact, answer) },
                             onExecuteArtifact = { artifact -> viewModel.executeArtifact(artifact) },
@@ -805,6 +799,11 @@ fun ClaudeChatView(
     onAnswerQuestion: (Artifact, String) -> Unit = { _, _ -> },
     onOpenModeSelection: () -> Unit = {},
     onRejectArtifact: (Artifact) -> Unit = {}
+    ,attachments: List<ChatAttachment> = emptyList(),
+    attachmentError: String? = null,
+    onPickAttachments: () -> Unit = {},
+    onRemoveAttachment: (ChatAttachment) -> Unit = {},
+    onDismissAttachmentError: () -> Unit = {}
 ) {
     var promptInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -1250,4 +1249,28 @@ fun ClaudeMessageRow(
             }
         }
     }
+}
+
+private const val MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024
+
+private fun isSupportedTextAttachment(name: String, mimeType: String): Boolean {
+    if (mimeType.startsWith("text/")) return true
+    return name.substringAfterLast('.', "").lowercase() in setOf(
+        "txt", "md", "java", "kt", "kts", "xml", "json", "yaml", "yml", "html", "css",
+        "js", "ts", "tsx", "jsx", "py", "sh", "c", "cpp", "h", "hpp", "gradle", "properties"
+    )
+}
+
+private fun java.io.InputStream.readLimitedBytes(limit: Int): ByteArray {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    var total = 0
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        total += count
+        require(total <= limit) { "Файл больше 4 МБ" }
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray()
 }

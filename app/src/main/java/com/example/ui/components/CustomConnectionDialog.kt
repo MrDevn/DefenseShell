@@ -46,11 +46,11 @@ fun CustomConnectionDialog(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // Вкладки списка: 0 = Мои подключения, 1 = Free (бесплатные модели для всех)
+    // 0 = saved APIs, 1 = free presets, 2 = local GGUF server.
     var selectedTab by remember { mutableStateOf(if (SHOW_FREE_TAB && connections.isEmpty()) 1 else 0) }
 
     // Screen mode: 0 = Connection list, 1 = Add / Edit Connection Form
-    var isEditingForm by remember { mutableStateOf(connections.isEmpty() && !SHOW_FREE_TAB) }
+    var isEditingForm by remember { mutableStateOf(false) }
     var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
     // Form fields
@@ -63,6 +63,8 @@ fun CustomConnectionDialog(
     var bodyTemplateInput by remember { mutableStateOf("") }
     var showAdvanced by remember { mutableStateOf(false) }
     var isPasswordVisible by remember { mutableStateOf(false) }
+    var localUrlInput by remember { mutableStateOf("http://10.0.2.2:8080/v1") }
+    var localModelInput by remember { mutableStateOf("local-model") }
 
     // Test result state
     var isTesting by remember { mutableStateOf(false) }
@@ -108,6 +110,8 @@ fun CustomConnectionDialog(
                                 if (editingConnectionId != null) "Редактирование подключения" else "Новое подключение"
                             } else if (selectedTab == 1) {
                                 "Бесплатные модели (Free)"
+                            } else if (selectedTab == 2) {
+                                "Локальная GGUF-модель"
                             } else {
                                 "Пользовательские подключения"
                             },
@@ -116,6 +120,8 @@ fun CustomConnectionDialog(
                         Text(
                             text = if (!isEditingForm && selectedTab == 1) {
                                 "Доступны всем • работают сразу, без ключей"
+                            } else if (!isEditingForm && selectedTab == 2) {
+                                "llama.cpp • Ollama • LM Studio"
                             } else {
                                 "Тип подключения: Пользовательский (Custom)"
                             },
@@ -134,18 +140,18 @@ fun CustomConnectionDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (!isEditingForm) {
-                    // Вкладки: Мои подключения / Free (Free временно скрыта)
-                    if (SHOW_FREE_TAB) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ConnectionTabPill(label = "Мои", selected = selectedTab == 0) { selectedTab = 0 }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ConnectionTabPill(label = "API", selected = selectedTab == 0) { selectedTab = 0 }
+                        if (SHOW_FREE_TAB) {
                             ConnectionTabPill(label = "Free", selected = selectedTab == 1) { selectedTab = 1 }
                         }
-
-                        Spacer(modifier = Modifier.height(12.dp))
+                        ConnectionTabPill(label = "GGUF", selected = selectedTab == 2) { selectedTab = 2 }
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     if (SHOW_FREE_TAB && selectedTab == 1) {
                         // Вкладка Free: встроенные бесплатные модели, доступны всем без настройки
@@ -235,6 +241,74 @@ fun CustomConnectionDialog(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    } else if (selectedTab == 2) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Icon(Icons.Default.Memory, contentDescription = null, tint = ClaudeTerracotta)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Запустите GGUF через локальный сервер", fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(5.dp))
+                                        Text(
+                                            "На компьютере запустите llama-server -m model.gguf --host 0.0.0.0 --port 8080. Затем укажите его адрес ниже. На телефоне используйте LAN-IP компьютера.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            item {
+                                OutlinedTextField(
+                                    value = localUrlInput,
+                                    onValueChange = { localUrlInput = it },
+                                    label = { Text("Адрес локального сервера") },
+                                    supportingText = { Text("Эмулятор: 10.0.2.2, телефон: 192.168.x.x") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            item {
+                                OutlinedTextField(
+                                    value = localModelInput,
+                                    onValueChange = { localModelInput = it },
+                                    label = { Text("Имя модели") },
+                                    placeholder = { Text("Qwen2.5-Coder-7B-Q4_K_M.gguf") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            item {
+                                Button(
+                                    onClick = {
+                                        val connection = CustomConnection(
+                                            id = "local-gguf-${java.util.UUID.randomUUID()}",
+                                            providerId = "Local GGUF",
+                                            baseUrl = localUrlInput.trim(),
+                                            apiKey = "",
+                                            modelId = localModelInput.trim(),
+                                            isActive = true
+                                        )
+                                        onSaveConnection(connection)
+                                        onSelectConnection(connection)
+                                        onDismiss()
+                                    },
+                                    enabled = localUrlInput.isNotBlank() && localModelInput.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Подключить локальную модель")
                                 }
                             }
                         }
