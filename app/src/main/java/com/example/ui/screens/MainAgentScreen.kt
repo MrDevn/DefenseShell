@@ -8,12 +8,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -799,13 +797,6 @@ fun ClaudeChatView(
     var promptInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    val quickPrompts = listOf(
-        "Покажи файлы в ~/ (\$HOME)",
-        "Создай тестовый скрипт в \$HOME",
-        "Покажи файлы в текущей папке",
-        "Проверь свободное место на диске"
-    )
-
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -1018,83 +1009,6 @@ fun ClaudeChatView(
             }
         }
 
-        // Quick Suggestion Chips
-        if (messages.size <= 2) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                quickPrompts.forEach { suggestion ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onSendMessage(suggestion) }
-                    ) {
-                        Text(
-                            text = suggestion,
-                            style = TextStyle(
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Mode Status Bar
-        Surface(
-            color = if (operationMode != AgentOperationMode.SAFETY) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onOpenModeSelection() }
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .widthIn(max = 760.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    Icon(
-                        imageVector = if (operationMode != AgentOperationMode.SAFETY) Icons.Default.Bolt else Icons.Default.Security,
-                        contentDescription = null,
-                        tint = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when (operationMode) {
-                            AgentOperationMode.EXTRA -> "Режим Extra: команды и операции выполняются автоматически"
-                            AgentOperationMode.SAFETY -> "Режим Safety: требуется подтверждение выполнения"
-                        },
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        maxLines = 1
-                    )
-                }
-
-                Text(
-                    text = "Изменить",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ClaudeTerracotta
-                    )
-                )
-            }
-        }
-
         // Centralized Minimalist Input Bar
         Box(
             modifier = Modifier
@@ -1102,7 +1016,7 @@ fun ClaudeChatView(
                 // Поднимаем поле ввода над клавиатурой (edge-to-edge: adjustResize не работает,
                 // поэтому явно учитываем IME insets вместе с navigation bar)
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
             Surface(
@@ -1167,9 +1081,9 @@ fun ClaudeChatView(
                         },
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(32.dp)
                             .offset(x = (-4).dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(
                                 if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta
                                 else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
