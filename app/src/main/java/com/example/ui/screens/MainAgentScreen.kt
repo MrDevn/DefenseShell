@@ -127,7 +127,8 @@ fun MainAgentScreen(
     val attachmentPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
-        pendingAttachments = uris.take(4).mapNotNull { uri ->
+        attachmentError = null
+        val newAttachments = uris.mapNotNull { uri ->
             runCatching {
                 val resolver = context.contentResolver
                 val mime = resolver.getType(uri) ?: "application/octet-stream"
@@ -140,6 +141,7 @@ fun MainAgentScreen(
                 ChatAttachment(name, mime, bytes)
             }.onFailure { attachmentError = it.message }.getOrNull()
         }
+        pendingAttachments = (pendingAttachments + newAttachments).distinctBy { it.name }.take(4)
     }
 
     // Auto-refresh storage permission when returning to the app from system settings
@@ -1061,17 +1063,63 @@ fun ClaudeChatView(
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 680.dp)
+                    .widthIn(max = 430.dp)
                     .fillMaxWidth(),
                 shape = CircleShape,
                 color = Color(0xFF1A1A1A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
                 shadowElevation = 3.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(start = 4.dp, end = 5.dp, top = 2.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column {
+                    if (attachments.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.padding(start = 10.dp, top = 6.dp, end = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            attachments.forEach { attachment ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.White.copy(alpha = 0.10f),
+                                    modifier = Modifier.clickable { onRemoveAttachment(attachment) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (attachment.mimeType.startsWith("image/")) Icons.Default.Image else Icons.Default.AttachFile,
+                                            contentDescription = null,
+                                            tint = Color.White.copy(alpha = 0.75f),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = attachment.name.take(16),
+                                            color = Color.White.copy(alpha = 0.82f),
+                                            fontSize = 10.sp,
+                                            maxLines = 1
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(Icons.Default.Close, contentDescription = "Удалить вложение", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (attachmentError != null) {
+                        Text(
+                            text = attachmentError ?: "",
+                            color = ClaudeDanger,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.padding(start = 4.dp, end = 5.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     IconButton(
                         onClick = onPickAttachments,
                         modifier = Modifier.size(30.dp)
@@ -1121,12 +1169,9 @@ fun ClaudeChatView(
                             .testTag("chat_input_field")
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
-                    IconButton(
-                        onClick = { },
-                        modifier = Modifier.size(30.dp)
-                    ) {
+                    IconButton(onClick = { }, modifier = Modifier.size(30.dp)) {
                         Icon(
                             imageVector = Icons.Default.Mic,
                             contentDescription = "Голосовой ввод",
@@ -1157,6 +1202,7 @@ fun ClaudeChatView(
                             tint = Color.White,
                             modifier = Modifier.size(if (isGenerating) 18.dp else 16.dp)
                         )
+                    }
                     }
                 }
             }
