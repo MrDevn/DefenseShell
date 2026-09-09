@@ -24,6 +24,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.Credentials
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -73,6 +74,16 @@ class AiAgentService(
         }
         if (connection.modelId.isBlank()) {
             throw IllegalArgumentException("Ошибка: не указан model-id для подключения '${connection.providerId}'. Укажите имя модели.")
+        }
+
+        if (connection.providerId.equals("OpenCode", ignoreCase = true)) {
+            return@withContext executeOpenCodePrompt(
+                prompt = prompt,
+                connection = connection,
+                workingDir = workingDir,
+                attachments = attachments,
+                onPartialText = onPartialText
+            )
         }
 
         val url = connection.completionsUrl
@@ -276,6 +287,79 @@ class AiAgentService(
             artifacts = artifacts,
             rawModelOutput = rawText
         )
+    }
+
+    private val openCodeSessions = mutableMapOf<String, String>()
+
+    private fun executeOpenCodePrompt(
+        prompt: String,
+        connection: CustomConnection,
+        workingDir: String,
+        attachments: List<ChatAttachment>,
+        onPartialText: ((String) -> Unit)?
+    ): AgentExecutionResult {
+        val headers = { builder: Request.Builder ->
+            if (connection.apiKey.isNotBlank()) {
+                builder.header("Authorization", Credentials.basic("opencode", connection.apiKey))
+            }
+            builder.header("Accept", "application/json")
+        }
+        val baseUrl = connection.cleanBaseUrl
+        val sessionKey = "$baseUrl|$workingDir"
+        val sessionId = openCodeSessions[sessionKey] ?: run {
+            val sessionBody = "{}".toRequestBody("application/json; charset=utf-8".toMediaType())
+            val sessionRequest = Request.Builder()
+                .url("$baseUrl/session?directory=${java.net.URLEncoder.encode(workingDir, "UTF-8")}")
+                .post(sessionBody)
+                .apply { headers(this) }
+                .build()
+            httpClient.newCall(sessionRequest).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) throw IllegalStateException("OpenCode session: HTTP ${response.code}: $body")
+                JSONObject(body).getString("id")
+            }.also { openCodeSessions[sessionKey] = it }
+        }
+
+        val parts = JSONArray().put(JSONObject().apply {
+            put("type", "text")
+            put("text", buildString {
+                append(prompt)
+                attachments.filterNot { it.isImage }.forEach { attachment ->
+                    append("\n\n--- Файл: ${attachment.name} ---\n")
+                    append(attachment.bytes.toString(Charsets.UTF_8))
+                }
+            })
+        })
+        attachments.filter { it.isImage }.forEach { attachment ->
+            parts.put(JSONObject().apply {
+                put("type", "file")
+                put("mime", attachment.mimeType)
+                put("filename", attachment.name)
+                put("url", "data:${attachment.mimeType};base64,${Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)}")
+            })
+        }
+
+        val messageBody = JSONObject().put("parts", parts)
+            .put("agent", connection.modelId)
+            .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val messageRequest = Request.Builder()
+            .url("$baseUrl/session/$sessionId/message")
+            .post(messageBody)
+            .apply { headers(this) }
+            .build()
+        httpClient.newCall(messageRequest).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IllegalStateException("OpenCode message: HTTP ${response.code}: $body")
+            val partsResponse = JSONObject(body).optJSONArray("parts") ?: JSONArray()
+            val text = buildString {
+                for (index in 0 until partsResponse.length()) {
+                    val part = partsResponse.optJSONObject(index) ?: continue
+                    if (part.optString("type") == "text") append(part.optString("text"))
+                }
+            }.trim()
+            onPartialText?.invoke(text)
+            AgentExecutionResult(text, emptyList(), body)
+        }
     }
 
     /**
