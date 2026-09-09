@@ -1082,8 +1082,8 @@ fun ClaudeChatView(
                         enabled = isGenerating || promptInput.isNotBlank(),
                         modifier = Modifier
                             .size(32.dp)
-                            .offset(x = (-4).dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .offset(x = (-8).dp)
+                            .clip(RoundedCornerShape(20.dp))
                             .background(
                                 if (isGenerating || promptInput.isNotBlank()) ClaudeTerracotta
                                 else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
