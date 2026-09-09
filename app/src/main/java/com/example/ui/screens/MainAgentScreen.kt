@@ -994,10 +994,13 @@ fun ClaudeChatView(
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center
         ) {
+            Row(
+                modifier = Modifier.widthIn(max = 331.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
             Surface(
-                modifier = Modifier
-                    .widthIn(max = 430.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF1A1A1A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
@@ -1051,7 +1054,7 @@ fun ClaudeChatView(
                     }
                     Row(
                         modifier = Modifier
-                            .height(30.dp)
+                            .height(40.dp)
                             .padding(start = 4.dp, end = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1103,36 +1106,35 @@ fun ClaudeChatView(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .height(28.dp)
+                            .height(36.dp)
                             .testTag("chat_input_field")
                     )
-
-                    IconButton(
-                        onClick = {
-                            if (isGenerating) {
-                                onStopGeneration()
-                            } else if (promptInput.isNotBlank()) {
-                                onSendMessage(promptInput)
-                                promptInput = ""
-                            }
-                        },
-                        enabled = isGenerating || promptInput.isNotBlank(),
-                        modifier = Modifier
-                            .size(26.dp)
-                            .offset(x = (-7).dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF3B82F6))
-                            .testTag("send_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
-                            contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
-                            tint = Color.White,
-                            modifier = Modifier.size(if (isGenerating) 15.dp else 14.dp)
-                        )
-                    }
                     }
                 }
+            }
+            IconButton(
+                onClick = {
+                    if (isGenerating) {
+                        onStopGeneration()
+                    } else if (promptInput.isNotBlank()) {
+                        onSendMessage(promptInput)
+                        promptInput = ""
+                    }
+                },
+                enabled = isGenerating || promptInput.isNotBlank(),
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF3B82F6))
+                    .testTag("send_button")
+            ) {
+                Icon(
+                    imageVector = if (isGenerating) Icons.Default.Stop else Icons.Default.KeyboardArrowUp,
+                    contentDescription = if (isGenerating) "Остановить генерацию" else "Отправить",
+                    tint = Color.White,
+                    modifier = Modifier.size(if (isGenerating) 15.dp else 14.dp)
+                )
+            }
             }
         }
     }
