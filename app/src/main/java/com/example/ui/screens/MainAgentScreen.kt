@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,8 +26,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -194,24 +197,15 @@ fun MainAgentScreen(
                         .padding(20.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
+                        // Круглый логотип в меню
+                        Image(
+                            painter = painterResource(R.drawable.logo),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .size(32.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(ClaudeTerracottaLight, ClaudeTerracottaDark)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                                .clip(CircleShape)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "CodeStudio",
@@ -580,40 +574,47 @@ fun MainAgentScreen(
                     val visibleTabs = AppNavigationTab.values().filter {
                         it != AppNavigationTab.REPOS || githubLogin != null
                     }
-                    TabRow(
-                        selectedTabIndex = visibleTabs.indexOf(activeTab).coerceAtLeast(0),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = ClaudeTerracotta,
-                        divider = {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                thickness = 1.dp
-                            )
-                        }
+                    // Ровные вкладки-квадратики со скруглёнными краями, без подписей
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         visibleTabs.forEach { tab ->
-                            Tab(
-                                selected = activeTab == tab,
-                                onClick = {
-                                    activeTab = tab
-                                    if (tab == AppNavigationTab.REPOS && githubRepos.isEmpty() && !githubBusy) {
-                                        viewModel.loadGitHubRepos()
+                            val selected = activeTab == tab
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(
+                                        if (selected) ClaudeTerracotta
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                    .clickable {
+                                        activeTab = tab
+                                        if (tab == AppNavigationTab.REPOS && githubRepos.isEmpty() && !githubBusy) {
+                                            viewModel.loadGitHubRepos()
+                                        }
                                     }
-                                },
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = tab.icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = tab.label, fontSize = 12.sp, fontWeight = if (activeTab == tab) FontWeight.SemiBold else FontWeight.Normal)
-                                    }
-                                }
-                            )
+                                    .testTag("tab_${tab.name}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.label,
+                                    tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        thickness = 1.dp
+                    )
                 }
             },
             modifier = modifier.fillMaxSize()

@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
@@ -13,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -23,8 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.ClaudeDanger
 import com.example.ui.theme.ClaudeTerracotta
-import com.example.ui.theme.ClaudeTerracottaDark
-import com.example.ui.theme.ClaudeTerracottaLight
 import kotlinx.coroutines.launch
 
 /**
@@ -59,22 +61,15 @@ fun LoginGateScreen(
                 .padding(32.dp)
                 .widthIn(max = 360.dp)
         ) {
-            Box(
+            // Круглый логотип на экране входа (иконка лаунчера остаётся стандартной)
+            Image(
+                painter = painterResource(R.drawable.logo),
+                contentDescription = "CodeStudio",
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.linearGradient(listOf(ClaudeTerracottaLight, ClaudeTerracottaDark))
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Code,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+                    .size(88.dp)
+                    .clip(CircleShape)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
