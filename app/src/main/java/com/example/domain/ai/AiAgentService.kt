@@ -75,6 +75,10 @@ class AiAgentService(
             throw IllegalArgumentException("Ошибка: не указан model-id для подключения '${connection.providerId}'. Укажите имя модели.")
         }
 
+        if (connection.providerId.equals("Gemini", ignoreCase = true)) {
+            return@withContext executeGeminiPrompt(prompt, connection, attachments, onPartialText)
+        }
+
         val url = connection.completionsUrl
         val systemPrompt = buildSystemPrompt(workingDir, operationMode, grantedFolders)
 
@@ -276,6 +280,41 @@ class AiAgentService(
             artifacts = artifacts,
             rawModelOutput = rawText
         )
+    }
+
+    private fun executeGeminiPrompt(
+        prompt: String,
+        connection: CustomConnection,
+        attachments: List<ChatAttachment>,
+        onPartialText: ((String) -> Unit)?
+    ): AgentExecutionResult {
+        if (connection.apiKey.isBlank()) throw IllegalArgumentException("Для Gemini требуется API-ключ.")
+        val parts = JSONArray().put(JSONObject().put("text", prompt))
+        attachments.filter { it.isImage }.forEach { attachment ->
+            parts.put(JSONObject().put("inline_data", JSONObject()
+                .put("mime_type", attachment.mimeType)
+                .put("data", Base64.encodeToString(attachment.bytes, Base64.NO_WRAP))))
+        }
+        val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", parts)))
+            .put("generationConfig", JSONObject().put("temperature", 0.7))
+            .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val key = java.net.URLEncoder.encode(connection.apiKey, "UTF-8")
+        val request = Request.Builder()
+            .url("${connection.cleanBaseUrl}/models/${connection.modelId}:generateContent?key=$key")
+            .post(body)
+            .header("Accept", "application/json")
+            .build()
+        return httpClient.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IllegalStateException("Gemini: HTTP ${response.code}: $raw")
+            val candidates = JSONObject(raw).optJSONArray("candidates") ?: JSONArray()
+            val responseParts = candidates.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: JSONArray()
+            val text = buildString {
+                for (index in 0 until responseParts.length()) append(responseParts.optJSONObject(index)?.optString("text").orEmpty())
+            }.trim()
+            onPartialText?.invoke(text)
+            AgentExecutionResult(text, emptyList(), raw)
+        }
     }
 
     /**

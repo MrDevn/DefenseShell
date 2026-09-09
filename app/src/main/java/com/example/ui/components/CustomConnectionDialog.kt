@@ -448,6 +448,38 @@ fun CustomConnectionDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Добавить подключение")
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    providerIdInput = "OpenAI"
+                                    baseUrlInput = "https://api.openai.com/v1"
+                                    apiKeyInput = ""
+                                    modelIdInput = "gpt-4o-mini"
+                                    authHeaderFormatInput = "Bearer %s"
+                                    customHeadersInput = ""
+                                    bodyTemplateInput = ""
+                                    isEditingForm = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("OpenAI") }
+                            OutlinedButton(
+                                onClick = {
+                                    providerIdInput = "Gemini"
+                                    baseUrlInput = "https://generativelanguage.googleapis.com/v1beta"
+                                    apiKeyInput = ""
+                                    modelIdInput = "gemini-2.0-flash"
+                                    authHeaderFormatInput = "Bearer %s"
+                                    customHeadersInput = ""
+                                    bodyTemplateInput = ""
+                                    isEditingForm = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Gemini") }
+                        }
                     }
                 } else {
                     // Form for Custom Connection
