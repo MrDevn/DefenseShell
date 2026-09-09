@@ -516,10 +516,10 @@ fun MainAgentScreen(
                             }
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                                 color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
-                                    if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                     if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                                 ),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -531,18 +531,18 @@ fun MainAgentScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = if (operationMode == AgentOperationMode.EXTRA) Icons.Default.Bolt else Icons.Default.Security,
+                                         imageVector = if (operationMode != AgentOperationMode.SAFETY) Icons.Default.Bolt else Icons.Default.Security,
                                         contentDescription = null,
-                                        tint = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                                         tint = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = if (operationMode == AgentOperationMode.EXTRA) "Extra" else "Safety",
+                                         text = operationMode.title,
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 11.sp,
-                                            color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
+                                             color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface
                                         )
                                     )
                                 }
@@ -1050,7 +1050,7 @@ fun ClaudeChatView(
 
         // Mode Status Bar
         Surface(
-            color = if (operationMode == AgentOperationMode.EXTRA) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            color = if (operationMode != AgentOperationMode.SAFETY) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onOpenModeSelection() }
@@ -1064,20 +1064,21 @@ fun ClaudeChatView(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Icon(
-                        imageVector = if (operationMode == AgentOperationMode.EXTRA) Icons.Default.Bolt else Icons.Default.Security,
+                        imageVector = if (operationMode != AgentOperationMode.SAFETY) Icons.Default.Bolt else Icons.Default.Security,
                         contentDescription = null,
-                        tint = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (operationMode == AgentOperationMode.EXTRA)
-                            "Режим Extra: команды и операции выполняются автоматически"
-                        else
-                            "Режим Safety: требуется подтверждение выполнения",
+                        text = when (operationMode) {
+                            AgentOperationMode.EXTRA -> "Режим Extra: команды и операции выполняются автоматически"
+                            AgentOperationMode.FAST -> "Режим Fast: быстрые автономные ответы и действия"
+                            AgentOperationMode.SAFETY -> "Режим Safety: требуется подтверждение выполнения"
+                        },
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
-                            color = if (operationMode == AgentOperationMode.EXTRA) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (operationMode != AgentOperationMode.SAFETY) ClaudeTerracotta else MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         maxLines = 1
                     )

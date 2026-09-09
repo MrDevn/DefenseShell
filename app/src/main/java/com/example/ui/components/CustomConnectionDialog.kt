@@ -67,8 +67,6 @@ fun CustomConnectionDialog(
     var isPasswordVisible by remember { mutableStateOf(false) }
     var localUrlInput by remember { mutableStateOf("http://10.0.2.2:8080/v1") }
     var localModelInput by remember { mutableStateOf("local-model") }
-    var openCodeUrlInput by remember { mutableStateOf("http://10.0.2.2:4096") }
-    var openCodePasswordInput by remember { mutableStateOf("") }
 
     // Test result state
     var isTesting by remember { mutableStateOf(false) }
@@ -116,8 +114,6 @@ fun CustomConnectionDialog(
                                 "Бесплатные модели (Free)"
                             } else if (selectedTab == 2) {
                                 "Локальная GGUF-модель"
-                            } else if (selectedTab == 3) {
-                                "OpenCode Server"
                             } else {
                                 "Пользовательские подключения"
                             },
@@ -128,8 +124,6 @@ fun CustomConnectionDialog(
                                 "Доступны всем • работают сразу, без ключей"
                             } else if (!isEditingForm && selectedTab == 2) {
                                 "llama.cpp • Ollama • LM Studio"
-                            } else if (!isEditingForm && selectedTab == 3) {
-                                "Подключение к opencode serve"
                             } else {
                                 "Тип подключения: Пользовательский (Custom)"
                             },
@@ -159,7 +153,6 @@ fun CustomConnectionDialog(
                             ConnectionTabPill(label = "Free", selected = selectedTab == 1) { selectedTab = 1 }
                         }
                         ConnectionTabPill(label = "GGUF", selected = selectedTab == 2) { selectedTab = 2 }
-                        ConnectionTabPill(label = "OpenCode", selected = selectedTab == 3) { selectedTab = 3 }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -320,74 +313,6 @@ fun CustomConnectionDialog(
                                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Подключить локальную модель")
-                                }
-                            }
-                        }
-                    } else if (selectedTab == 3) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            item {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        Icon(Icons.Default.Terminal, contentDescription = null, tint = ClaudeTerracotta)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text("Подключить OpenCode", fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            "Запустите: opencode serve --hostname 0.0.0.0 --port 4096. Для телефона укажите IP компьютера в локальной сети.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                            item {
-                                OutlinedTextField(
-                                    value = openCodeUrlInput,
-                                    onValueChange = { openCodeUrlInput = it },
-                                    label = { Text("URL OpenCode Server") },
-                                    placeholder = { Text("http://192.168.1.10:4096") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            item {
-                                OutlinedTextField(
-                                    value = openCodePasswordInput,
-                                    onValueChange = { openCodePasswordInput = it },
-                                    label = { Text("Пароль (если задан OPENCODE_SERVER_PASSWORD)") },
-                                    singleLine = true,
-                                    visualTransformation = PasswordVisualTransformation(),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            item {
-                                Button(
-                                    onClick = {
-                                        val connection = CustomConnection(
-                                            id = "opencode-${java.util.UUID.randomUUID()}",
-                                            providerId = "OpenCode",
-                                            baseUrl = openCodeUrlInput.trim().trimEnd('/'),
-                                            apiKey = openCodePasswordInput,
-                                            modelId = "build",
-                                            isActive = true
-                                        )
-                                        onSaveConnection(connection)
-                                        onSelectConnection(connection)
-                                        onDismiss()
-                                    },
-                                    enabled = openCodeUrlInput.isNotBlank(),
-                                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                                    shape = RoundedCornerShape(14.dp)
-                                ) {
-                                    Icon(Icons.Default.Link, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Подключить OpenCode")
                                 }
                             }
                         }

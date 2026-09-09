@@ -24,7 +24,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.Credentials
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -76,16 +75,6 @@ class AiAgentService(
             throw IllegalArgumentException("Ошибка: не указан model-id для подключения '${connection.providerId}'. Укажите имя модели.")
         }
 
-        if (connection.providerId.equals("OpenCode", ignoreCase = true)) {
-            return@withContext executeOpenCodePrompt(
-                prompt = prompt,
-                connection = connection,
-                workingDir = workingDir,
-                attachments = attachments,
-                onPartialText = onPartialText
-            )
-        }
-
         val url = connection.completionsUrl
         val systemPrompt = buildSystemPrompt(workingDir, operationMode, grantedFolders)
 
@@ -97,7 +86,7 @@ class AiAgentService(
         })
 
         // Add previous conversation messages (last 10 to keep within context limits)
-        val recentHistory = conversationHistory.takeLast(10)
+        val recentHistory = conversationHistory.takeLast(if (operationMode == AgentOperationMode.FAST) 4 else 10)
         for (msg in recentHistory) {
             val roleStr = when (msg.role) {
                 MessageRole.USER -> "user"
@@ -124,10 +113,10 @@ class AiAgentService(
                     .replace("{{messages}}", messagesJson.toString())
                     .replace("{{stream}}", "true")
             } catch (_: Exception) {
-                buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true)
+                    buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true, fast = operationMode == AgentOperationMode.FAST)
             }
         } else {
-            buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true)
+            buildDefaultOpenAiBody(connection.modelId, messagesJson, stream = true, fast = operationMode == AgentOperationMode.FAST)
         }
 
         val requestBuilder = Request.Builder()
@@ -289,79 +278,6 @@ class AiAgentService(
         )
     }
 
-    private val openCodeSessions = mutableMapOf<String, String>()
-
-    private fun executeOpenCodePrompt(
-        prompt: String,
-        connection: CustomConnection,
-        workingDir: String,
-        attachments: List<ChatAttachment>,
-        onPartialText: ((String) -> Unit)?
-    ): AgentExecutionResult {
-        val headers = { builder: Request.Builder ->
-            if (connection.apiKey.isNotBlank()) {
-                builder.header("Authorization", Credentials.basic("opencode", connection.apiKey))
-            }
-            builder.header("Accept", "application/json")
-        }
-        val baseUrl = connection.cleanBaseUrl
-        val sessionKey = "$baseUrl|$workingDir"
-        val sessionId = openCodeSessions[sessionKey] ?: run {
-            val sessionBody = "{}".toRequestBody("application/json; charset=utf-8".toMediaType())
-            val sessionRequest = Request.Builder()
-                .url("$baseUrl/session?directory=${java.net.URLEncoder.encode(workingDir, "UTF-8")}")
-                .post(sessionBody)
-                .apply { headers(this) }
-                .build()
-            httpClient.newCall(sessionRequest).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) throw IllegalStateException("OpenCode session: HTTP ${response.code}: $body")
-                JSONObject(body).getString("id")
-            }.also { openCodeSessions[sessionKey] = it }
-        }
-
-        val parts = JSONArray().put(JSONObject().apply {
-            put("type", "text")
-            put("text", buildString {
-                append(prompt)
-                attachments.filterNot { it.isImage }.forEach { attachment ->
-                    append("\n\n--- Файл: ${attachment.name} ---\n")
-                    append(attachment.bytes.toString(Charsets.UTF_8))
-                }
-            })
-        })
-        attachments.filter { it.isImage }.forEach { attachment ->
-            parts.put(JSONObject().apply {
-                put("type", "file")
-                put("mime", attachment.mimeType)
-                put("filename", attachment.name)
-                put("url", "data:${attachment.mimeType};base64,${Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)}")
-            })
-        }
-
-        val messageBody = JSONObject().put("parts", parts)
-            .put("agent", connection.modelId)
-            .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val messageRequest = Request.Builder()
-            .url("$baseUrl/session/$sessionId/message")
-            .post(messageBody)
-            .apply { headers(this) }
-            .build()
-        return httpClient.newCall(messageRequest).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw IllegalStateException("OpenCode message: HTTP ${response.code}: $body")
-            val partsResponse = JSONObject(body).optJSONArray("parts") ?: JSONArray()
-            val text = buildString {
-                for (index in 0 until partsResponse.length()) {
-                    val part = partsResponse.optJSONObject(index) ?: continue
-                    if (part.optString("type") == "text") append(part.optString("text"))
-                }
-            }.trim()
-            onPartialText?.invoke(text)
-            AgentExecutionResult(text, emptyList(), body)
-        }
-    }
-
     /**
      * Tests a Custom connection with a lightweight ping request to verify URL, key, and model.
      */
@@ -421,12 +337,13 @@ class AiAgentService(
         }
     }
 
-    private fun buildDefaultOpenAiBody(modelId: String, messages: JSONArray, stream: Boolean): String {
+    private fun buildDefaultOpenAiBody(modelId: String, messages: JSONArray, stream: Boolean, fast: Boolean = false): String {
         val obj = JSONObject()
         obj.put("model", modelId)
         obj.put("messages", messages)
         obj.put("stream", stream)
-        obj.put("temperature", 0.7)
+        obj.put("temperature", if (fast) 0.3 else 0.7)
+        if (fast) obj.put("max_tokens", 1200)
         return obj.toString()
     }
 
@@ -581,6 +498,12 @@ class AiAgentService(
 РЕЖИМ РАБОТЫ: EXTRA — ПОЛНАЯ АВТОНОМНОСТЬ
 В этом режиме твои действия выполняются АВТОМАТИЧЕСКИ без пошагового запроса подтверждения у пользователя (в пределах разрешённых директорий).
 Генерируй все необходимые команды и файлы для полного выполнения задачи от начала до конца.
+""".trimIndent()
+            AgentOperationMode.FAST -> """
+РЕЖИМ РАБОТЫ: FAST — БЫСТРЫЙ EXTRA
+Действуй автономно в пределах разрешённых директорий. Не трать время на длинные рассуждения и не объясняй очевидное.
+Отвечай кратко, сразу выполняй необходимые действия и возвращай только важный результат.
+Не задавай лишних вопросов и не генерируй артефакты, если задача уже выполнена.
 """.trimIndent()
             AgentOperationMode.SAFETY -> """
 РЕЖИМ РАБОТЫ: SAFETY — ПОДТВЕРЖДЕНИЕ КАЖДОГО ШАГА
