@@ -118,6 +118,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Текущая джоба генерации (для кнопки «Стоп»)
     private var generationJob: Job? = null
+    private var terminalJob: Job? = null
 
     @Volatile
     private var stopRequested = false
@@ -381,6 +382,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateToDirectory(path: String) {
+        if (!fileSystemEngine.isInsideHome(path) &&
+            grantedFolders.value.none { fileSystemEngine.isFolderAuthorized(path, listOf(it)) }
+        ) {
+            requestFolderPermission(path)
+            return
+        }
         _currentWorkingDir.value = path
         refreshFiles(path)
     }
@@ -389,8 +396,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = File(_currentWorkingDir.value)
         val parent = current.parentFile
         if (parent != null && parent.exists() && parent.canRead()) {
-            _currentWorkingDir.value = parent.absolutePath
-            refreshFiles(parent.absolutePath)
+            navigateToDirectory(parent.absolutePath)
         }
     }
 
@@ -666,7 +672,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // -------------------------------------------------------------
 
     fun executeTerminalCommand(cmd: String) {
-        viewModelScope.launch {
+        terminalJob?.cancel()
+        terminalJob = viewModelScope.launch {
             val (isDang, reason) = fileSystemEngine.checkDangerousCommand(cmd)
             if (isDang) {
                 _pendingDangerousArtifact.value = Artifact(
@@ -684,6 +691,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             runTerminalCommandDirect(cmd)
         }
+    }
+
+    fun stopTerminalCommand() {
+        terminalJob?.cancel()
+        terminalEngine.cancelCurrentCommand()
+        terminalJob = null
     }
 
     private suspend fun runTerminalCommandDirect(cmd: String) {
@@ -745,6 +758,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestFolderPermission(targetPath: String) {
         _pendingFolderPermission.value = fileSystemEngine.extractRequiredFolder(targetPath)
+    }
+
+    fun requestNewFolderPermission() {
+        _pendingFolderPermission.value = _currentWorkingDir.value
     }
 
     fun dismissFolderPermission() {
@@ -1063,6 +1080,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopGeneration() {
         stopRequested = true
         generationJob?.cancel()
+        stopTerminalCommand()
         stopAgentForegroundService()
     }
 

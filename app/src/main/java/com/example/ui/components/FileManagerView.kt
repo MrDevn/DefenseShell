@@ -76,51 +76,6 @@ fun FileManagerView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Storage Permission Alert if needed
-        if (!hasStoragePermission) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WarningAmber,
-                        contentDescription = null,
-                        tint = ClaudeDanger,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Требуется доступ ко всем файлам",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = ClaudeDanger
-                            )
-                        )
-                        Text(
-                            text = "Для работы с реальными файлами в Download, Documents и др. разрешите All Files Access в системе.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = onRequestStoragePermission,
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text("Открыть", fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
         // Quick folder shortcuts
         Row(
             modifier = Modifier

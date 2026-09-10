@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.data.model.CommandLog
 import com.example.domain.filesystem.FileSystemEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.File
@@ -15,6 +16,24 @@ class TerminalEngine(
     private val fileSystemEngine: FileSystemEngine,
     private val prootEnvironment: ProotEnvironment = ProotEnvironment(context, fileSystemEngine)
 ) {
+
+    @Volatile
+    private var activeProcess: Process? = null
+
+    fun cancelCurrentCommand() {
+        activeProcess?.let { process ->
+            stopProcess(process)
+        }
+        activeProcess = null
+    }
+
+    private fun stopProcess(process: Process) {
+        process.destroy()
+        // destroyForcibly was added after the app's minSdk; use it when present.
+        runCatching {
+            process.javaClass.getMethod("destroyForcibly").invoke(process)
+        }
+    }
 
     val isProotReady: Boolean get() = prootEnvironment.isBootstrapped
 
@@ -184,6 +203,13 @@ class TerminalEngine(
             }
 
             val process = processBuilder.start()
+            activeProcess = process
+            val cancellationHandle = kotlin.coroutines.coroutineContext[Job]?.invokeOnCompletion { cause ->
+                if (cause != null) {
+                    stopProcess(process)
+                    if (activeProcess === process) activeProcess = null
+                }
+            }
 
             val stdoutLines = StringBuilder()
             val stderrLines = StringBuilder()
@@ -215,7 +241,9 @@ class TerminalEngine(
             // увеличен до 15 минут — этого достаточно даже для холодного старта.
             val finished = process.waitFor(15, TimeUnit.MINUTES)
             if (!finished) {
-                process.destroy()
+                stopProcess(process)
+                cancellationHandle?.dispose()
+                if (activeProcess === process) activeProcess = null
                 return@withContext CommandLog(
                     command = trimmedCmd,
                     workingDir = workDirFile.absolutePath,
@@ -233,6 +261,8 @@ class TerminalEngine(
             val exitCode = process.exitValue()
             val out = stdoutLines.toString().trimEnd()
             val err = stderrLines.toString().trimEnd().ifEmpty { null }
+            cancellationHandle?.dispose()
+            if (activeProcess === process) activeProcess = null
 
             // Android (targetSdk 29+) forbids execve() on scripts/binaries the app
             // itself wrote into its private data directory, even after chmod +x —

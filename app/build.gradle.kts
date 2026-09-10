@@ -24,8 +24,8 @@ android {
     // способ обойти это без рута, ценой совместимости с новыми политиками
     // Play Store (приложение распространяется вне Play Store).
     targetSdk = 28
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = providers.gradleProperty("versionCode").orElse("3").get().toInt()
+    versionName = providers.gradleProperty("versionName").orElse("1.2").get()
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

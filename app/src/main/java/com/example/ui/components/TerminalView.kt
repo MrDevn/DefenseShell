@@ -39,7 +39,8 @@ fun TerminalView(
     onClearTerminal: () -> Unit,
     modifier: Modifier = Modifier,
     bootstrapProgress: String? = null,
-    executingCommand: String? = null
+    executingCommand: String? = null,
+    onStopCommand: () -> Unit = {}
 ) {
     var inputCommand by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -315,6 +316,16 @@ fun TerminalView(
                                 color = ClaudeTerracotta
                             )
                         )
+                        TextButton(onClick = onStopCommand) {
+                            Text(
+                                text = "Stop",
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    color = ClaudeDanger
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -381,7 +392,9 @@ fun TerminalView(
 
             IconButton(
                 onClick = {
-                    if (inputCommand.isNotBlank()) {
+                    if (executingCommand != null) {
+                        onStopCommand()
+                    } else if (inputCommand.isNotBlank()) {
                         onExecuteCommand(inputCommand)
                         inputCommand = ""
                     }
@@ -389,11 +402,11 @@ fun TerminalView(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(ClaudeTerracotta)
+                    .background(if (executingCommand != null) ClaudeDanger else ClaudeTerracotta)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Run Command",
+                    imageVector = if (executingCommand != null) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                    contentDescription = if (executingCommand != null) "Остановить команду" else "Выполнить команду",
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )

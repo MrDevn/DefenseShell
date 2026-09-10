@@ -669,6 +669,7 @@ fun MainAgentScreen(
                             workingDirectory = workingDir,
                             bootstrapProgress = linuxBootstrapProgress,
                             executingCommand = executingTerminalCommand,
+                            onStopCommand = { viewModel.stopTerminalCommand() },
                             commandHistory = recentLogs.map {
                                 CommandLog(
                                     id = it.id,
@@ -699,6 +700,7 @@ fun MainAgentScreen(
                                 context.startActivity(viewModel.getStorageSettingsIntent())
                             },
                             onRequestNewFolderPermission = {
+                                viewModel.requestNewFolderPermission()
                                 folderPickerLauncher.launch(null)
                             },
                             onRevokeFolderPermission = { folderId ->

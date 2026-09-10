@@ -117,7 +117,9 @@ $androidMountDisplayRoot/<имя_папки>.
         return try {
             val resolved = resolvePath(path).canonicalFile
             val home = agentHomeDir.canonicalFile
-            resolved.absolutePath.startsWith(home.absolutePath)
+            val appRoot = context.filesDir.canonicalFile
+            isSameOrInside(resolved.absolutePath, home.absolutePath) ||
+                isSameOrInside(resolved.absolutePath, appRoot.absolutePath)
         } catch (_: Exception) {
             path.startsWith(agentHomeDir.absolutePath) ||
                 path.startsWith(homeDisplayPath) ||
@@ -207,22 +209,8 @@ $androidMountDisplayRoot/<имя_папки>.
         val map = linkedMapOf<String, File>()
 
         map["Домашняя папка (\$HOME)"] = agentHomeDir
-        map["Хранилище (/sdcard)"] = primaryStorageDir
-
-        val download = File(primaryStorageDir, "Download")
-        if (download.exists() || download.mkdirs()) map["Download"] = download
-
-        val documents = File(primaryStorageDir, "Documents")
-        if (documents.exists() || documents.mkdirs()) map["Documents"] = documents
-
-        val dcim = File(primaryStorageDir, "DCIM")
-        if (dcim.exists()) map["DCIM"] = dcim
-
-        val pictures = File(primaryStorageDir, "Pictures")
-        if (pictures.exists()) map["Pictures"] = pictures
-
-        val music = File(primaryStorageDir, "Music")
-        if (music.exists()) map["Music"] = music
+        val defense = File(agentHomeDir, "Defense")
+        if (defense.exists() && defense.isDirectory) map["Defense"] = defense
 
         map["Песочница приложения"] = context.filesDir
         map
