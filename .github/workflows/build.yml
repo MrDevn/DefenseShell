@@ -42,7 +42,10 @@ jobs:
 
       - name: Restore or generate debug keystore
         run: |
-          if [ -f debug.keystore.base64 ]; then
+          if [ -n "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" ]; then
+            echo "Decoding stable debug.keystore from repository secret..."
+            printf '%s' '${{ secrets.DEBUG_KEYSTORE_BASE64 }}' | base64 -d > debug.keystore
+          elif [ -f debug.keystore.base64 ]; then
             echo "Decoding debug.keystore from base64..."
             base64 -d debug.keystore.base64 > debug.keystore
           elif [ ! -f debug.keystore ]; then
