@@ -312,7 +312,8 @@ class ProotEnvironment(
                 val aptCommand =
                     "ok=0; for i in 1 2 3; do $apt update -y && ok=1 && break; sleep 3; done; " +
                         "if [ \"\$ok\" != \"1\" ]; then echo 'apt-get update: 3 неудачные попытки' >&2; exit 100; fi; " +
-                        "$apt install -y --no-install-recommends $APT_PACKAGES && " +
+                        "($apt install -y --no-install-recommends $APT_PACKAGES || " +
+                        "$apt -f install -y) && dpkg --configure -a && " +
                         "$apt clean -y && rm -rf /var/lib/apt/lists/*"
                 val install = runProotCommand(
                     aptCommand,
@@ -322,8 +323,9 @@ class ProotEnvironment(
                 if (install.exitCode != 0) {
                     return@withContext Result.failure(
                         IllegalStateException(
-                            "apt-get завершился с кодом ${install.exitCode}: " +
-                                (install.errorOutput ?: install.output).take(900)
+                            "apt-get завершился с кодом ${install.exitCode}:\n" +
+                                "stdout:\n${install.output.takeLast(1800)}\n" +
+                                "stderr:\n${install.errorOutput.orEmpty().takeLast(1200)}"
                         )
                     )
                 }
@@ -428,6 +430,16 @@ class ProotEnvironment(
         File(rootfsDir, "tmp").mkdirs()
         // Каталог подменяется на /dev/shm внутри proot (в Android-овском /dev его нет).
         File(rootfsDir, "var/shm").mkdirs()
+        // Пакеты Ubuntu не должны запускать systemd-службы во время postinst:
+        // внутри proot нет настоящего init и такие попытки ломают dpkg.
+        val policyRc = File(rootfsDir, "usr/sbin/policy-rc.d")
+        policyRc.parentFile?.mkdirs()
+        policyRc.writeText("#!/bin/sh\nexit 101\n")
+        policyRc.setExecutable(true, false)
+        val systemctlStub = File(rootfsDir, "usr/local/bin/systemctl")
+        systemctlStub.parentFile?.mkdirs()
+        systemctlStub.writeText("#!/bin/sh\nexit 0\n")
+        systemctlStub.setExecutable(true, false)
         fileSystemEngine.agentHomeDir.mkdirs()
         ensurePasswdEntry()
 
