@@ -122,14 +122,13 @@ class TerminalEngine(
 
             val env = processBuilder.environment()
             if (usingProot && virtualWorkDir != null) {
-                // Внутри rootfs не должно быть переменных окружения Android
-                // (/system/bin и т.д.) — это ломает сборочные инструменты,
-                // поэтому задаём чистое окружение, как в обычном Alpine.
+                // Внутри Ubuntu не должно быть переменных окружения Android
+                // (/system/bin и т.д.) — это ломает java и сборочные инструменты.
+                // requiredEnv дополнительно содержит PROOT_LOADER/PROOT_LOADER_32
+                // (без них Termux-сборка proot ищет loader по чужому пути и падает)
+                // и JAVA_HOME, без которого gradlew отказывается работать.
                 env.clear()
-                env["HOME"] = "/home/codestudio"
-                env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                env["TERM"] = "xterm-256color"
-                env["LANG"] = "C.UTF-8"
+                env.putAll(prootEnvironment.requiredEnv)
             } else {
                 env["HOME"] = fileSystemEngine.defaultWorkingDir.absolutePath
                 env["PWD"] = workDirFile.absolutePath

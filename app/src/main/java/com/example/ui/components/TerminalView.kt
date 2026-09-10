@@ -206,7 +206,9 @@ fun TerminalView(
         ) {
             item {
                 Text(
-                    text = "Welcome to CodeStudio Linux Sandbox v1.0.0\nType commands below or ask the AI agent in the Chat tab.",
+                    text = "Welcome to CodeStudio Ubuntu Sandbox\n" +
+                        "Первая команда скачает и настроит Ubuntu + OpenJDK (нужен интернет).\n" +
+                        "Type commands below or ask the AI agent in the Chat tab.",
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
