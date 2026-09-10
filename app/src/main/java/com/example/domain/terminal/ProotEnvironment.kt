@@ -127,7 +127,7 @@ class ProotEnvironment(
     val isBootstrapped: Boolean
         get() = bootstrapMarker.exists() &&
             prootFilesPresent() && rootfsLooksUsable() &&
-            File(rootfsDir, "usr/lib/jvm").exists()
+            detectJavaHome() != null
 
     val isSupportedArch: Boolean get() = termuxArch() != null && ubuntuArch() != null
 
@@ -174,16 +174,20 @@ class ProotEnvironment(
             // доверяет JAVA_HOME больше, чем PATH, и с неверным значением падает с
             // "JAVA_HOME is set to an invalid directory". Без него gradlew берёт
             // java из PATH, что тоже корректно работает.
-            detectJavaHome()?.let { env["JAVA_HOME"] = it }
+            detectJavaHome()?.let {
+                env["JAVA_HOME"] = it
+                env["PATH"] = "$it/bin:${env["PATH"]}"
+            }
             return env
         }
 
     /** Определяет установленный JDK внутри rootfs (путь в координатах Ubuntu). */
     private fun detectJavaHome(): String? {
         val jvmDir = File(rootfsDir, "usr/lib/jvm")
-        if (File(jvmDir, "default-java").exists()) return "/usr/lib/jvm/default-java"
+        val defaultJava = File(jvmDir, "default-java")
+        if (File(defaultJava, "bin/java").isFile) return "/usr/lib/jvm/default-java"
         val candidate = jvmDir.listFiles()
-            ?.filter { it.isDirectory && it.name.startsWith("java-") }
+            ?.filter { it.name.startsWith("java-") && File(it, "bin/java").isFile }
             ?.sortedByDescending { it.name }
             ?.firstOrNull()
         return candidate?.let { "/usr/lib/jvm/${it.name}" }
@@ -302,7 +306,7 @@ class ProotEnvironment(
 
             // --- Этап 4. JDK и инструменты -------------------------------------------
             val aptStage = "apt=$UBUNTU_POINT_RELEASE;jdk=17"
-            if (!stageDone(aptStageMarker, aptStage) || !File(rootfsDir, "usr/lib/jvm").exists()) {
+            if (!stageDone(aptStageMarker, aptStage) || detectJavaHome() == null) {
                 onProgress("Установка OpenJDK 17 и инструментов через apt (нужен интернет, несколько минут)...")
                 // APT::Sandbox::User=root обязателен: в proot root поддельный, и
                 // штатный сброс привилегий apt на пользователя _apt падает с
@@ -313,8 +317,7 @@ class ProotEnvironment(
                     "ok=0; for i in 1 2 3; do $apt update -y && ok=1 && break; sleep 3; done; " +
                         "if [ \"\$ok\" != \"1\" ]; then echo 'apt-get update: 3 неудачные попытки' >&2; exit 100; fi; " +
                         "($apt install -y --no-install-recommends $APT_PACKAGES || " +
-                        "$apt -f install -y) && dpkg --configure -a && " +
-                        "$apt clean -y && rm -rf /var/lib/apt/lists/*"
+                        "$apt -f install -y) && dpkg --configure -a"
                 val install = runProotCommand(
                     aptCommand,
                     workDirVirtual = "/",
@@ -326,6 +329,13 @@ class ProotEnvironment(
                             "apt-get завершился с кодом ${install.exitCode}:\n" +
                                 "stdout:\n${install.output.takeLast(1800)}\n" +
                                 "stderr:\n${install.errorOutput.orEmpty().takeLast(1200)}"
+                        )
+                    )
+                }
+                if (detectJavaHome() == null) {
+                    return@withContext Result.failure(
+                        IllegalStateException(
+                            "Пакеты установлены не полностью: исполняемый /usr/lib/jvm/*/bin/java не найден"
                         )
                     )
                 }
