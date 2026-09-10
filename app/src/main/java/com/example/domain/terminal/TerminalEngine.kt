@@ -68,9 +68,15 @@ class TerminalEngine(
             }
         }
 
-        // Try executing using system shell ProcessBuilder
+        // Run commands in a real bash login shell when available. This keeps
+        // Gradle, shell scripts, pipes and environment expansion working.
         try {
-            val processBuilder = ProcessBuilder("sh", "-c", trimmedCmd)
+            val shell = if (File("/system/bin/bash").canExecute() || File("/data/data/${context.packageName}/files/usr/bin/bash").canExecute()) {
+                "bash"
+            } else {
+                "sh"
+            }
+            val processBuilder = ProcessBuilder(shell, "-lc", trimmedCmd)
             processBuilder.directory(workDirFile)
 
             val env = processBuilder.environment()
@@ -78,7 +84,8 @@ class TerminalEngine(
             env["PWD"] = workDirFile.absolutePath
             env["TMPDIR"] = context.cacheDir.absolutePath
             env["TERM"] = "xterm-256color"
-            env["PATH"] = "${env["PATH"]}:/system/bin:/system/xbin:/vendor/bin"
+            env["PATH"] = "${env["PATH"]}:/system/bin:/system/xbin:/vendor/bin:/data/data/${context.packageName}/files/usr/bin"
+            env["SHELL"] = shell
 
             val process = processBuilder.start()
 

@@ -235,7 +235,7 @@ class AiAgentService(
                             val deltaContent = extractDeltaFromChunk(chunkJson)
                             if (deltaContent.isNotEmpty()) {
                                 fullResponseText.append(deltaContent)
-                                onPartialText?.invoke(fullResponseText.toString())
+                                 onPartialText?.invoke(normalizeModelText(fullResponseText.toString()))
                             }
                         } catch (_: Exception) {
                             // Non-JSON SSE event
@@ -254,7 +254,7 @@ class AiAgentService(
                 } catch (_: Exception) {}
                 val parsedContent = extractContentFromNonStreaming(rawBody)
                 fullResponseText.append(parsedContent)
-                onPartialText?.invoke(fullResponseText.toString())
+                onPartialText?.invoke(normalizeModelText(fullResponseText.toString()))
             }
 
         } catch (e: Exception) {
