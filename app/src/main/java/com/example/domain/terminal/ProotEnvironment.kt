@@ -47,7 +47,7 @@ import java.util.concurrent.TimeUnit
  *      распаковывается в [FileSystemEngine.linuxRootDir]. Распаковка обязательно
  *      воспроизводит symlink'и (/bin -> usr/bin и т.д.) и hardlink'и, иначе
  *      Ubuntu не запускается.
- *   3. Внутри Ubuntu через apt ставятся OpenJDK 17 и базовые инструменты, после
+ *   3. Внутри Ubuntu через apt ставятся OpenJDK 21 и базовые инструменты, после
  *      чего работают `java`, `./gradlew build`, git, curl и т.д.
  */
 class ProotEnvironment(
@@ -85,11 +85,11 @@ class ProotEnvironment(
         )
 
         // Пакеты, без которых бессмысленна полноценная сборка проектов.
-    private const val APT_PACKAGES =
-            "openjdk-17-jdk-headless ca-certificates git curl unzip zip file less nano"
+        private const val APT_PACKAGES =
+            "openjdk-21-jdk-headless ca-certificates git curl unzip zip file less nano"
 
         private const val TEMURIN_JDK_URL =
-            "https://api.adoptium.net/v3/binary/latest/17/ga/linux/%s/jdk/hotspot/normal/eclipse"
+            "https://api.adoptium.net/v3/binary/latest/21/ga/linux/%s/jdk/hotspot/normal/eclipse"
 
         /** Пауза перед автоматическим повтором настройки после неудачи. */
         private const val BOOTSTRAP_RETRY_COOLDOWN_MS = 2 * 60 * 1000L
@@ -186,16 +186,27 @@ class ProotEnvironment(
 
     /** Определяет установленный JDK внутри rootfs (путь в координатах Ubuntu). */
     private fun detectJavaHome(): String? {
-        val bundled = File(rootfsDir, "opt/temurin-jdk-17")
-        if (File(bundled, "bin/java").isFile) return "/opt/temurin-jdk-17"
+        val bundled = File(rootfsDir, "opt/temurin-jdk-21")
+        if (isJava21Home(bundled)) return "/opt/temurin-jdk-21"
         val jvmDir = File(rootfsDir, "usr/lib/jvm")
         val defaultJava = File(jvmDir, "default-java")
-        if (File(defaultJava, "bin/java").isFile) return "/usr/lib/jvm/default-java"
+        if (isJava21Home(defaultJava)) return "/usr/lib/jvm/default-java"
         val candidate = jvmDir.listFiles()
-            ?.filter { it.name.startsWith("java-") && File(it, "bin/java").isFile }
+            ?.filter {
+                (it.name.startsWith("java-21") || it.name.startsWith("java-1.21")) &&
+                    isJava21Home(it)
+            }
             ?.sortedByDescending { it.name }
             ?.firstOrNull()
         return candidate?.let { "/usr/lib/jvm/${it.name}" }
+    }
+
+    private fun isJava21Home(home: File): Boolean {
+        if (!File(home, "bin/java").isFile) return false
+        val release = File(home, "release")
+        return release.readLines().any { line ->
+            line.startsWith("JAVA_VERSION=\"21.") || line.startsWith("JAVA_VERSION=21.")
+        }
     }
 
     /**
@@ -310,9 +321,9 @@ class ProotEnvironment(
             configureGuest()
 
             // --- Этап 4. JDK и инструменты -------------------------------------------
-            val aptStage = "apt=$UBUNTU_POINT_RELEASE;jdk=17"
+            val aptStage = "apt=$UBUNTU_POINT_RELEASE;jdk=21"
             if (!stageDone(aptStageMarker, aptStage) || detectJavaHome() == null) {
-                onProgress("Установка OpenJDK 17 и инструментов через apt (нужен интернет, несколько минут)...")
+                onProgress("Установка OpenJDK 21 и инструментов через apt (нужен интернет, несколько минут)...")
                 // APT::Sandbox::User=root обязателен: в proot root поддельный, и
                 // штатный сброс привилегий apt на пользователя _apt падает с
                 // "Could not switch saved set-user-ID". update дополнительно
@@ -589,7 +600,7 @@ class ProotEnvironment(
             "x86_64" -> "x64"
             else -> throw IllegalStateException("Temurin JDK не поддерживает архитектуру $termuxArch")
         }
-        val archive = File(context.cacheDir, "temurin-jdk-17-$apiArch.tar.gz")
+        val archive = File(context.cacheDir, "temurin-jdk-21-$apiArch.tar.gz")
         if (!archive.exists() || archive.length() == 0L) {
             downloadFile(TEMURIN_JDK_URL.format(apiArch), archive, null)
         }
@@ -600,7 +611,7 @@ class ProotEnvironment(
         extractTarGz(archive, extractDir)
         val source = extractDir.listFiles()?.firstOrNull { it.isDirectory }
             ?: throw IllegalStateException("В архиве Temurin не найден каталог JDK")
-        val target = File(rootfsDir, "opt/temurin-jdk-17")
+        val target = File(rootfsDir, "opt/temurin-jdk-21")
         target.deleteRecursively()
         if (!source.renameTo(target)) {
             source.copyRecursively(target, overwrite = true)
