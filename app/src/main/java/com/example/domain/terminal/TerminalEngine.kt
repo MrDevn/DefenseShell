@@ -135,6 +135,21 @@ class TerminalEngine(
             val out = stdoutLines.toString().trimEnd()
             val err = stderrLines.toString().trimEnd().ifEmpty { null }
 
+            // Android (targetSdk 29+) forbids execve() on scripts/binaries the app
+            // itself wrote into its private data directory, even after chmod +x —
+            // this surfaces as exit code 126 "Permission denied" (e.g. "./gradlew").
+            // Workaround: re-run the same command through an explicitly-invoked
+            // interpreter ("sh ./gradlew ..." instead of "./gradlew ..."), since the
+            // interpreter binary itself lives in /system/bin and is always
+            // executable; it only needs to *read* the script, not exec it directly.
+            if (exitCode == 126 && err?.contains("Permission denied") == true && canRetryViaInterpreter(trimmedCmd)) {
+                return@withContext executeCommand(
+                    command = "$shell $trimmedCmd",
+                    workingDir = workDirFile.absolutePath,
+                    source = source
+                )
+            }
+
             CommandLog(
                 command = trimmedCmd,
                 workingDir = workDirFile.absolutePath,
@@ -148,6 +163,19 @@ class TerminalEngine(
             // Built-in fallback interpreter for common shell commands
             handleBuiltinCommand(trimmedCmd, workDirFile, startTime, source, e.message)
         }
+    }
+
+    /**
+     * True when [cmd] looks like a direct invocation of a local script
+     * ("./gradlew build", "./script.sh", "gradlew") that failed with a
+     * permission/exec error and could plausibly succeed if re-run as
+     * "sh <cmd>" instead. Guards against infinite recursion by refusing to
+     * retry a command that is already prefixed with an interpreter.
+     */
+    private fun canRetryViaInterpreter(cmd: String): Boolean {
+        val first = cmd.split("\\s+".toRegex()).firstOrNull() ?: return false
+        if (first in setOf("sh", "bash", "dash", "zsh", "ksh")) return false
+        return first.startsWith("./") || first.endsWith(".sh") || first == "gradlew"
     }
 
     private fun handleBuiltinCommand(
