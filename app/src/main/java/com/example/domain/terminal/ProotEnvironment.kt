@@ -85,8 +85,11 @@ class ProotEnvironment(
         )
 
         // Пакеты, без которых бессмысленна полноценная сборка проектов.
-        private const val APT_PACKAGES =
+    private const val APT_PACKAGES =
             "openjdk-17-jdk-headless ca-certificates git curl unzip zip file less nano"
+
+        private const val TEMURIN_JDK_URL =
+            "https://api.adoptium.net/v3/binary/latest/17/ga/linux/%s/jdk/hotspot/normal/eclipse"
 
         /** Пауза перед автоматическим повтором настройки после неудачи. */
         private const val BOOTSTRAP_RETRY_COOLDOWN_MS = 2 * 60 * 1000L
@@ -183,6 +186,8 @@ class ProotEnvironment(
 
     /** Определяет установленный JDK внутри rootfs (путь в координатах Ubuntu). */
     private fun detectJavaHome(): String? {
+        val bundled = File(rootfsDir, "opt/temurin-jdk-17")
+        if (File(bundled, "bin/java").isFile) return "/opt/temurin-jdk-17"
         val jvmDir = File(rootfsDir, "usr/lib/jvm")
         val defaultJava = File(jvmDir, "default-java")
         if (File(defaultJava, "bin/java").isFile) return "/usr/lib/jvm/default-java"
@@ -323,20 +328,23 @@ class ProotEnvironment(
                     workDirVirtual = "/",
                     home = "/root"
                 )
-                if (install.exitCode != 0) {
-                    return@withContext Result.failure(
-                        IllegalStateException(
-                            "apt-get завершился с кодом ${install.exitCode}:\n" +
-                                "stdout:\n${install.output.takeLast(1800)}\n" +
-                                "stderr:\n${install.errorOutput.orEmpty().takeLast(1200)}"
-                        )
-                    )
+                if (detectJavaHome() == null) {
+                    onProgress("apt не установил Java, скачивание рабочего OpenJDK напрямую...")
+                    runCatching { installTemurinJdk(termuxArch) }
+                        .onFailure { fallbackError ->
+                            return@withContext Result.failure(
+                                IllegalStateException(
+                                    "apt-get завершился с кодом ${install.exitCode}, а fallback JDK тоже не установлен: " +
+                                        "${fallbackError.message}\n" +
+                                        "apt stdout:\n${install.output.takeLast(1400)}\n" +
+                                        "apt stderr:\n${install.errorOutput.orEmpty().takeLast(1000)}"
+                                )
+                            )
+                        }
                 }
                 if (detectJavaHome() == null) {
                     return@withContext Result.failure(
-                        IllegalStateException(
-                            "Пакеты установлены не полностью: исполняемый /usr/lib/jvm/*/bin/java не найден"
-                        )
+                        IllegalStateException("После настройки не найден рабочий Java runtime")
                     )
                 }
                 markStage(aptStageMarker, aptStage)
@@ -567,6 +575,39 @@ class ProotEnvironment(
                     "Нарушена целостность $url: ожидался SHA256 $expectedSha256, получен $actual"
                 )
             }
+        }
+    }
+
+    /**
+     * Запасной способ установки JDK без dpkg. Нужен для proot, где postinst
+     * openjdk иногда ломается на Android-ядре или неполном systemd.
+     */
+    private fun installTemurinJdk(termuxArch: String) {
+        val apiArch = when (termuxArch) {
+            "aarch64" -> "aarch64"
+            "arm" -> "arm"
+            "x86_64" -> "x64"
+            else -> throw IllegalStateException("Temurin JDK не поддерживает архитектуру $termuxArch")
+        }
+        val archive = File(context.cacheDir, "temurin-jdk-17-$apiArch.tar.gz")
+        if (!archive.exists() || archive.length() == 0L) {
+            downloadFile(TEMURIN_JDK_URL.format(apiArch), archive, null)
+        }
+
+        val extractDir = File(rootfsDir, "opt/.temurin-extract")
+        extractDir.deleteRecursively()
+        extractDir.mkdirs()
+        extractTarGz(archive, extractDir)
+        val source = extractDir.listFiles()?.firstOrNull { it.isDirectory }
+            ?: throw IllegalStateException("В архиве Temurin не найден каталог JDK")
+        val target = File(rootfsDir, "opt/temurin-jdk-17")
+        target.deleteRecursively()
+        if (!source.renameTo(target)) {
+            source.copyRecursively(target, overwrite = true)
+        }
+        extractDir.deleteRecursively()
+        if (!File(target, "bin/java").isFile) {
+            throw IllegalStateException("Архив Temurin распакован без bin/java")
         }
     }
 
