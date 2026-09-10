@@ -519,8 +519,8 @@ class ProotEnvironment(
 
     /**
      * Распаковка tar.gz rootfs. Критично воспроизводить symlink'и и hardlink'и:
-     * в Ubuntu /bin, /lib, /sbin — симлинки на usr/*, а dpkg активно использует
-     * hardlink'и. Без этого rootfs просто не запускается.
+     * в Ubuntu каталоги bin, lib и sbin — симлинки на usr, а dpkg активно
+     * использует hardlink'и. Без этого rootfs просто не запускается.
      */
     private fun extractTarGz(archive: File, destDir: File) {
         val destCanonical = destDir.canonicalPath
