@@ -40,6 +40,7 @@ fun TerminalView(
     modifier: Modifier = Modifier,
     bootstrapProgress: String? = null,
     executingCommand: String? = null,
+    agentBusy: Boolean = false,
     onStopCommand: () -> Unit = {}
 ) {
     var inputCommand by remember { mutableStateOf("") }
@@ -56,7 +57,7 @@ fun TerminalView(
         "clear"
     )
 
-    LaunchedEffect(commandHistory.size, executingCommand) {
+    LaunchedEffect(commandHistory.size, executingCommand, agentBusy) {
         if (commandHistory.isNotEmpty() || executingCommand != null) {
             // Index 0 is the welcome block; the live execution row follows logs.
             val lastItem = if (executingCommand != null) commandHistory.size + 1 else commandHistory.size
@@ -286,7 +287,7 @@ fun TerminalView(
                 }
             }
 
-            if (executingCommand != null) {
+            if (executingCommand != null || agentBusy) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -299,7 +300,7 @@ fun TerminalView(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "$ $executingCommand",
+                            text = "$ ${executingCommand ?: "agent is working"}",
                             style = TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
@@ -309,7 +310,7 @@ fun TerminalView(
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = "Executing",
+                            text = if (executingCommand != null) "Executing" else "Working",
                             style = TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp,
@@ -392,7 +393,7 @@ fun TerminalView(
 
             IconButton(
                 onClick = {
-                    if (executingCommand != null) {
+                    if (executingCommand != null || agentBusy) {
                         onStopCommand()
                     } else if (inputCommand.isNotBlank()) {
                         onExecuteCommand(inputCommand)
@@ -402,11 +403,11 @@ fun TerminalView(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (executingCommand != null) ClaudeDanger else ClaudeTerracotta)
+                    .background(if (executingCommand != null || agentBusy) ClaudeDanger else ClaudeTerracotta)
             ) {
                 Icon(
-                    imageVector = if (executingCommand != null) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
-                    contentDescription = if (executingCommand != null) "Остановить команду" else "Выполнить команду",
+                    imageVector = if (executingCommand != null || agentBusy) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                    contentDescription = if (executingCommand != null || agentBusy) "Остановить выполнение" else "Выполнить команду",
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )

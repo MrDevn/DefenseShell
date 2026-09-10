@@ -780,6 +780,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
             }
 
+            // После выбора папки делаем её текущей рабочей директорией: пользователь
+            // может сразу запускать задачу из файлового менеджера, без повторного
+            // описания пути в чате.
+            _currentWorkingDir.value = granted.folderPath
+            refreshFiles(granted.folderPath)
+
             // Ждём, пока список выданных папок реально обновится (Room Flow асинхронный),
             // иначе автовыполнение артефактов снова запросит то же самое разрешение
             withTimeoutOrNull(3000) {
@@ -878,7 +884,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun executeArtifact(artifact: Artifact) {
         viewModelScope.launch {
-            executeArtifactInternal(artifact)
+            executeArtifactWithUiState(artifact)
             _isGenerating.value = false
             // После выполнения — автоматически продолжаем цепочку агента, если все артефакты обработаны
             maybeContinueAgentChain()
@@ -966,6 +972,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updated
             }
             else -> artifact
+        }
+    }
+
+    private suspend fun executeArtifactWithUiState(artifact: Artifact): Artifact {
+        val command = artifact.command
+            ?: if (artifact.type == ArtifactType.TERMINAL_COMMAND) artifact.content else null
+        if (artifact.type == ArtifactType.TERMINAL_COMMAND || artifact.type == ArtifactType.CODE_SNIPPET) {
+            _executingTerminalCommand.value = command
+        }
+        return try {
+            executeArtifactInternal(artifact)
+        } finally {
+            if (_executingTerminalCommand.value == command) _executingTerminalCommand.value = null
         }
     }
 
@@ -1198,7 +1217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     for (art in artifacts) {
                         if (stopRequested) break
                         if (art.status == ArtifactStatus.IDLE && art.isAgentExecutable()) {
-                            executed.add(executeArtifactInternal(art))
+                            executed.add(executeArtifactWithUiState(art))
                             if (_pendingFolderPermission.value != null) break
                         }
                     }

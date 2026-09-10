@@ -669,7 +669,11 @@ fun MainAgentScreen(
                             workingDirectory = workingDir,
                             bootstrapProgress = linuxBootstrapProgress,
                             executingCommand = executingTerminalCommand,
-                            onStopCommand = { viewModel.stopTerminalCommand() },
+                            agentBusy = isGenerating,
+                            onStopCommand = {
+                                if (isGenerating) viewModel.stopGeneration()
+                                else viewModel.stopTerminalCommand()
+                            },
                             commandHistory = recentLogs.map {
                                 CommandLog(
                                     id = it.id,

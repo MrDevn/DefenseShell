@@ -65,7 +65,7 @@ class FileSystemEngine(private val context: Context) {
     val androidMountDisplayRoot: String = "/mnt/android"
 
     val defaultWorkingDir: File
-        get() = agentHomeDir
+        get() = File(agentHomeDir, "Defense")
 
     init {
         ensureHomeDirectoryExists()
@@ -78,6 +78,7 @@ class FileSystemEngine(private val context: Context) {
     fun ensureHomeDirectoryExists() {
         try {
             agentHomeDir.mkdirs()
+            defaultWorkingDir.mkdirs()
             File(linuxRootDir, "tmp").mkdirs()
             File(linuxRootDir, "etc").mkdirs()
             File(linuxRootDir, "var/log").mkdirs()
