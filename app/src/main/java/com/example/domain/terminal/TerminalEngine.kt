@@ -12,13 +12,18 @@ import java.util.concurrent.TimeUnit
 
 class TerminalEngine(
     private val context: Context,
-    private val fileSystemEngine: FileSystemEngine
+    private val fileSystemEngine: FileSystemEngine,
+    private val prootEnvironment: ProotEnvironment = ProotEnvironment(context, fileSystemEngine)
 ) {
+
+    val isProotReady: Boolean get() = prootEnvironment.isBootstrapped
 
     suspend fun executeCommand(
         command: String,
         workingDir: String = fileSystemEngine.defaultWorkingDir.absolutePath,
-        source: String = "USER"
+        source: String = "USER",
+        onBootstrapProgress: ((String?) -> Unit)? = null,
+        allowBootstrapRetry: Boolean = true
     ): CommandLog = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val trimmedCmd = command.trim()
@@ -70,22 +75,69 @@ class TerminalEngine(
 
         // Run commands in a real bash login shell when available. This keeps
         // Gradle, shell scripts, pipes and environment expansion working.
+        val androidShell = if (File("/system/bin/bash").canExecute() || File("/data/data/${context.packageName}/files/usr/bin/bash").canExecute()) {
+            "bash"
+        } else {
+            "sh"
+        }
+
         try {
-            val shell = if (File("/system/bin/bash").canExecute() || File("/data/data/${context.packageName}/files/usr/bin/bash").canExecute()) {
-                "bash"
+            val usingProot: Boolean
+            val virtualWorkDir: String?
+            var bootstrapFailure: String? = null
+
+            if (prootEnvironment.isBootstrapped) {
+                usingProot = true
+                virtualWorkDir = prootEnvironment.toVirtualPath(workDirFile)
+            } else if (prootEnvironment.isSupportedArch && allowBootstrapRetry) {
+                // Первый запуск любой команды в терминале автоматически настраивает
+                // полноценное Linux-окружение (proot + Alpine rootfs + OpenJDK).
+                // Без него команды вроде "./gradlew build" физически не могут
+                // работать: в голом Android нет ни настоящей Linux-файловой
+                // системы, ни JVM.
+                val bootstrapResult = prootEnvironment.bootstrap { msg -> onBootstrapProgress?.invoke(msg) }
+                onBootstrapProgress?.invoke(null)
+                if (bootstrapResult.isSuccess) {
+                    usingProot = true
+                    virtualWorkDir = prootEnvironment.toVirtualPath(workDirFile)
+                } else {
+                    // Не блокируем команду полностью: выполняем её напрямую через
+                    // системный shell Android, но честно сообщаем, что полноценное
+                    // Linux-окружение (Gradle, JDK) сейчас недоступно.
+                    bootstrapFailure = bootstrapResult.exceptionOrNull()?.message
+                    usingProot = false
+                    virtualWorkDir = null
+                }
             } else {
-                "sh"
+                usingProot = false
+                virtualWorkDir = null
             }
-            val processBuilder = ProcessBuilder(shell, "-lc", trimmedCmd)
-            processBuilder.directory(workDirFile)
+
+            val processBuilder = if (usingProot && virtualWorkDir != null) {
+                ProcessBuilder(prootEnvironment.buildProotCommand(trimmedCmd, virtualWorkDir))
+                    .apply { directory(workDirFile) }
+            } else {
+                ProcessBuilder(androidShell, "-lc", trimmedCmd).apply { directory(workDirFile) }
+            }
 
             val env = processBuilder.environment()
-            env["HOME"] = fileSystemEngine.defaultWorkingDir.absolutePath
-            env["PWD"] = workDirFile.absolutePath
-            env["TMPDIR"] = context.cacheDir.absolutePath
-            env["TERM"] = "xterm-256color"
-            env["PATH"] = "${env["PATH"]}:/system/bin:/system/xbin:/vendor/bin:/data/data/${context.packageName}/files/usr/bin"
-            env["SHELL"] = shell
+            if (usingProot && virtualWorkDir != null) {
+                // Внутри rootfs не должно быть переменных окружения Android
+                // (/system/bin и т.д.) — это ломает сборочные инструменты,
+                // поэтому задаём чистое окружение, как в обычном Alpine.
+                env.clear()
+                env["HOME"] = "/home/codestudio"
+                env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                env["TERM"] = "xterm-256color"
+                env["LANG"] = "C.UTF-8"
+            } else {
+                env["HOME"] = fileSystemEngine.defaultWorkingDir.absolutePath
+                env["PWD"] = workDirFile.absolutePath
+                env["TMPDIR"] = context.cacheDir.absolutePath
+                env["TERM"] = "xterm-256color"
+                env["PATH"] = "${env["PATH"]}:/system/bin:/system/xbin:/vendor/bin:/data/data/${context.packageName}/files/usr/bin"
+                env["SHELL"] = androidShell
+            }
 
             val process = processBuilder.start()
 
@@ -114,7 +166,10 @@ class TerminalEngine(
             outThread.start()
             errThread.start()
 
-            val finished = process.waitFor(15, TimeUnit.SECONDS)
+            // Полноценная сборка Gradle (особенно первая, со скачиванием
+            // дистрибутива) занимает заметно больше 15 секунд, поэтому лимит
+            // увеличен до 15 минут — этого достаточно даже для холодного старта.
+            val finished = process.waitFor(15, TimeUnit.MINUTES)
             if (!finished) {
                 process.destroy()
                 return@withContext CommandLog(
@@ -122,7 +177,7 @@ class TerminalEngine(
                     workingDir = workDirFile.absolutePath,
                     exitCode = 124,
                     output = stdoutLines.toString(),
-                    errorOutput = "Command timed out after 15 seconds.",
+                    errorOutput = "Command timed out after 15 minutes.",
                     durationMs = System.currentTimeMillis() - startTime,
                     source = source
                 )
@@ -138,24 +193,31 @@ class TerminalEngine(
             // Android (targetSdk 29+) forbids execve() on scripts/binaries the app
             // itself wrote into its private data directory, even after chmod +x —
             // this surfaces as exit code 126 "Permission denied" (e.g. "./gradlew").
-            // Workaround: re-run the same command through an explicitly-invoked
-            // interpreter ("sh ./gradlew ..." instead of "./gradlew ..."), since the
-            // interpreter binary itself lives in /system/bin and is always
-            // executable; it only needs to *read* the script, not exec it directly.
-            if (exitCode == 126 && err?.contains("Permission denied") == true && canRetryViaInterpreter(trimmedCmd)) {
+            // Workaround applies only to the plain-Android-shell path (не proot):
+            // re-run the same command through an explicitly-invoked interpreter
+            // ("sh ./gradlew ..." instead of "./gradlew ..."), since the interpreter
+            // binary itself lives in /system/bin and is always executable.
+            if (!usingProot && exitCode == 126 && err?.contains("Permission denied") == true && canRetryViaInterpreter(trimmedCmd)) {
                 return@withContext executeCommand(
-                    command = "$shell $trimmedCmd",
+                    command = "$androidShell $trimmedCmd",
                     workingDir = workDirFile.absolutePath,
-                    source = source
+                    source = source,
+                    onBootstrapProgress = onBootstrapProgress,
+                    allowBootstrapRetry = false
                 )
             }
+
+            val bootstrapNote = bootstrapFailure?.let {
+                "Не удалось настроить Linux-окружение: $it. Команда выполнена напрямую через системный shell Android — полноценные инструменты (Gradle, JDK) в нём недоступны."
+            }
+            val combinedErr = listOfNotNull(bootstrapNote, err).joinToString("\n").ifEmpty { null }
 
             CommandLog(
                 command = trimmedCmd,
                 workingDir = workDirFile.absolutePath,
                 exitCode = exitCode,
                 output = out,
-                errorOutput = err,
+                errorOutput = combinedErr,
                 durationMs = System.currentTimeMillis() - startTime,
                 source = source
             )

@@ -16,7 +16,14 @@ android {
   defaultConfig {
     applicationId = "com.aistudio.claudeshell.kvmpwz"
     minSdk = 24
-    targetSdk = 36
+    // targetSdk намеренно держится на 28 (как у Termux на F-Droid): начиная с
+    // Android 10 (targetSdk 29+) SELinux запрещает приложению запускать через
+    // execve() любые исполняемые файлы, записанные им самим в приватную папку
+    // данных во время работы (proot, bash, JDK внутри rootfs и т.д.) — это
+    // ломает встроенную Linux-песочницу. Понижение targetSdk — единственный
+    // способ обойти это без рута, ценой совместимости с новыми политиками
+    // Play Store (приложение распространяется вне Play Store).
+    targetSdk = 28
     versionCode = 1
     versionName = "1.0"
 
@@ -118,6 +125,8 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
+  implementation(libs.commons.compress)
+  implementation(libs.xz)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

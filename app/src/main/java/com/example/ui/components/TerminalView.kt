@@ -37,7 +37,8 @@ fun TerminalView(
     commandHistory: List<CommandLog>,
     onExecuteCommand: (String) -> Unit,
     onClearTerminal: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bootstrapProgress: String? = null
 ) {
     var inputCommand by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -167,6 +168,32 @@ fun TerminalView(
         }
 
         HorizontalDivider(color = Color(0xFF232A33), thickness = 1.dp)
+
+        if (bootstrapProgress != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1A2029))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = ClaudeTerracotta
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = bootstrapProgress,
+                    style = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = ClaudeTerminalForeground
+                    )
+                )
+            }
+            HorizontalDivider(color = Color(0xFF232A33), thickness = 1.dp)
+        }
 
         // Output Console Feed
         LazyColumn(

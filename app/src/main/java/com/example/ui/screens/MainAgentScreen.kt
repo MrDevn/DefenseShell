@@ -89,6 +89,7 @@ fun MainAgentScreen(
     val activeConvId by viewModel.activeConversationId.collectAsStateWithLifecycle()
     val fileItems by viewModel.fileItems.collectAsStateWithLifecycle()
     val recentLogs by viewModel.recentCommandLogs.collectAsStateWithLifecycle()
+    val linuxBootstrapProgress by viewModel.linuxBootstrapProgress.collectAsStateWithLifecycle()
     val recentFileLogs by viewModel.recentFileLogs.collectAsStateWithLifecycle()
     val pendingDanger by viewModel.pendingDangerousArtifact.collectAsStateWithLifecycle()
     val activeArtifact by viewModel.activeArtifact.collectAsStateWithLifecycle()
@@ -665,6 +666,7 @@ fun MainAgentScreen(
                     AppNavigationTab.TERMINAL -> {
                         TerminalView(
                             workingDirectory = workingDir,
+                            bootstrapProgress = linuxBootstrapProgress,
                             commandHistory = recentLogs.map {
                                 CommandLog(
                                     id = it.id,

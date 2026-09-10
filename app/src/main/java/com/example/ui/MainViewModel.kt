@@ -107,6 +107,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _thinkingText = MutableStateFlow("")
     val thinkingText: StateFlow<String> = _thinkingText.asStateFlow()
 
+    // Прогресс первоначальной настройки Linux-окружения (proot + Alpine + JDK).
+    // null — настройка не идёт; строка — текущий этап, который нужно показать
+    // пользователю в терминале, пока команда ждёт завершения bootstrap.
+    private val _linuxBootstrapProgress = MutableStateFlow<String?>(null)
+    val linuxBootstrapProgress: StateFlow<String?> = _linuxBootstrapProgress.asStateFlow()
+
     // Текущая джоба генерации (для кнопки «Стоп»)
     private var generationJob: Job? = null
 
@@ -681,7 +687,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val log = terminalEngine.executeCommand(
             command = cmd,
             workingDir = _currentWorkingDir.value,
-            source = "USER"
+            source = "USER",
+            onBootstrapProgress = { progress -> _linuxBootstrapProgress.value = progress }
         )
         commandLogDao.insertLog(
             CommandLogEntity(
@@ -876,7 +883,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val log = terminalEngine.executeCommand(
                     command = cmdToRun,
                     workingDir = _currentWorkingDir.value,
-                    source = "AGENT"
+                    source = "AGENT",
+                    onBootstrapProgress = { progress -> _linuxBootstrapProgress.value = progress }
                 )
 
                 commandLogDao.insertLog(
