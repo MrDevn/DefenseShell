@@ -38,7 +38,8 @@ fun TerminalView(
     onExecuteCommand: (String) -> Unit,
     onClearTerminal: () -> Unit,
     modifier: Modifier = Modifier,
-    bootstrapProgress: String? = null
+    bootstrapProgress: String? = null,
+    executingCommand: String? = null
 ) {
     var inputCommand by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -54,9 +55,11 @@ fun TerminalView(
         "clear"
     )
 
-    LaunchedEffect(commandHistory.size) {
-        if (commandHistory.isNotEmpty()) {
-            listState.animateScrollToItem(commandHistory.size - 1)
+    LaunchedEffect(commandHistory.size, executingCommand) {
+        if (commandHistory.isNotEmpty() || executingCommand != null) {
+            // Index 0 is the welcome block; the live execution row follows logs.
+            val lastItem = if (executingCommand != null) commandHistory.size + 1 else commandHistory.size
+            listState.animateScrollToItem(lastItem)
         }
     }
 
@@ -202,7 +205,7 @@ fun TerminalView(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom)
         ) {
             item {
                 Text(
@@ -277,6 +280,40 @@ fun TerminalView(
                                 lineHeight = 17.sp
                             ),
                             modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            if (executingCommand != null) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(13.dp),
+                            strokeWidth = 2.dp,
+                            color = ClaudeTerracotta
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "$ $executingCommand",
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = ClaudeTerminalForeground
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Executing",
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                color = ClaudeTerracotta
+                            )
                         )
                     }
                 }

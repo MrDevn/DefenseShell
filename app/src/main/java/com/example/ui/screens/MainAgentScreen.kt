@@ -90,6 +90,7 @@ fun MainAgentScreen(
     val fileItems by viewModel.fileItems.collectAsStateWithLifecycle()
     val recentLogs by viewModel.recentCommandLogs.collectAsStateWithLifecycle()
     val linuxBootstrapProgress by viewModel.linuxBootstrapProgress.collectAsStateWithLifecycle()
+    val executingTerminalCommand by viewModel.executingTerminalCommand.collectAsStateWithLifecycle()
     val recentFileLogs by viewModel.recentFileLogs.collectAsStateWithLifecycle()
     val pendingDanger by viewModel.pendingDangerousArtifact.collectAsStateWithLifecycle()
     val activeArtifact by viewModel.activeArtifact.collectAsStateWithLifecycle()
@@ -667,6 +668,7 @@ fun MainAgentScreen(
                         TerminalView(
                             workingDirectory = workingDir,
                             bootstrapProgress = linuxBootstrapProgress,
+                            executingCommand = executingTerminalCommand,
                             commandHistory = recentLogs.map {
                                 CommandLog(
                                     id = it.id,

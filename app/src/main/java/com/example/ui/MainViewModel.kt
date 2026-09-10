@@ -113,6 +113,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _linuxBootstrapProgress = MutableStateFlow<String?>(null)
     val linuxBootstrapProgress: StateFlow<String?> = _linuxBootstrapProgress.asStateFlow()
 
+    private val _executingTerminalCommand = MutableStateFlow<String?>(null)
+    val executingTerminalCommand: StateFlow<String?> = _executingTerminalCommand.asStateFlow()
+
     // Текущая джоба генерации (для кнопки «Стоп»)
     private var generationJob: Job? = null
 
@@ -684,29 +687,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun runTerminalCommandDirect(cmd: String) {
-        val log = terminalEngine.executeCommand(
-            command = cmd,
-            workingDir = _currentWorkingDir.value,
-            source = "USER",
-            onBootstrapProgress = { progress -> _linuxBootstrapProgress.value = progress }
-        )
-        commandLogDao.insertLog(
-            CommandLogEntity(
-                command = log.command,
-                workingDir = log.workingDir,
-                exitCode = log.exitCode,
-                output = log.output,
-                errorOutput = log.errorOutput,
-                durationMs = log.durationMs,
-                source = log.source
+        _executingTerminalCommand.value = cmd
+        try {
+            val log = terminalEngine.executeCommand(
+                command = cmd,
+                workingDir = _currentWorkingDir.value,
+                source = "USER",
+                onBootstrapProgress = { progress -> _linuxBootstrapProgress.value = progress }
             )
-        )
+            commandLogDao.insertLog(
+                CommandLogEntity(
+                    command = log.command,
+                    workingDir = log.workingDir,
+                    exitCode = log.exitCode,
+                    output = log.output,
+                    errorOutput = log.errorOutput,
+                    durationMs = log.durationMs,
+                    source = log.source
+                )
+            )
 
-        if (log.workingDir != _currentWorkingDir.value) {
-            _currentWorkingDir.value = log.workingDir
-            refreshFiles(log.workingDir)
-        } else {
-            refreshFiles()
+            if (log.workingDir != _currentWorkingDir.value) {
+                _currentWorkingDir.value = log.workingDir
+                refreshFiles(log.workingDir)
+            } else {
+                refreshFiles()
+            }
+        } finally {
+            _executingTerminalCommand.value = null
+            _linuxBootstrapProgress.value = null
         }
     }
 
