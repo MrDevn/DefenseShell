@@ -18,6 +18,9 @@ class TerminalEngine(
 
     val isProotReady: Boolean get() = prootEnvironment.isBootstrapped
 
+    /** Команды явной настройки Linux-окружения (снимают cooldown после неудачи). */
+    private val setupCommands = setOf("setup-ubuntu", "ubuntu-setup", "proot-setup", "install-ubuntu")
+
     suspend fun executeCommand(
         command: String,
         workingDir: String = fileSystemEngine.defaultWorkingDir.absolutePath,
@@ -73,6 +76,34 @@ class TerminalEngine(
             }
         }
 
+        // Явная настройка Linux-окружения: снимает cooldown после неудачи и
+        // показывает подробный результат вместо молчаливого fallback на Android sh.
+        if (trimmedCmd in setupCommands) {
+            prootEnvironment.resetFailureCooldown()
+            val setup = prootEnvironment.bootstrap { msg -> onBootstrapProgress?.invoke(msg) }
+            onBootstrapProgress?.invoke(null)
+            return@withContext if (setup.isSuccess) {
+                CommandLog(
+                    command = trimmedCmd,
+                    workingDir = workDirFile.absolutePath,
+                    exitCode = 0,
+                    output = "Окружение Ubuntu готово: доступны java, javac, git, curl, unzip.",
+                    durationMs = System.currentTimeMillis() - startTime,
+                    source = source
+                )
+            } else {
+                CommandLog(
+                    command = trimmedCmd,
+                    workingDir = workDirFile.absolutePath,
+                    exitCode = 1,
+                    output = "",
+                    errorOutput = "Не удалось настроить окружение: ${setup.exceptionOrNull()?.message}",
+                    durationMs = System.currentTimeMillis() - startTime,
+                    source = source
+                )
+            }
+        }
+
         // Run commands in a real bash login shell when available. This keeps
         // Gradle, shell scripts, pipes and environment expansion working.
         val androidShell = if (File("/system/bin/bash").canExecute() || File("/data/data/${context.packageName}/files/usr/bin/bash").canExecute()) {
@@ -89,12 +120,17 @@ class TerminalEngine(
             if (prootEnvironment.isBootstrapped) {
                 usingProot = true
                 virtualWorkDir = prootEnvironment.toVirtualPath(workDirFile)
-            } else if (prootEnvironment.isSupportedArch && allowBootstrapRetry) {
+            } else if (
+                prootEnvironment.isSupportedArch &&
+                allowBootstrapRetry &&
+                !prootEnvironment.isInFailureCooldown
+            ) {
                 // Первый запуск любой команды в терминале автоматически настраивает
-                // полноценное Linux-окружение (proot + Alpine rootfs + OpenJDK).
+                // полноценное Linux-окружение (proot + Ubuntu rootfs + OpenJDK).
                 // Без него команды вроде "./gradlew build" физически не могут
                 // работать: в голом Android нет ни настоящей Linux-файловой
-                // системы, ни JVM.
+                // системы, ни JVM. После недавней неудачи повтор откладывается,
+                // чтобы терминал не зависал на каждой команде.
                 val bootstrapResult = prootEnvironment.bootstrap { msg -> onBootstrapProgress?.invoke(msg) }
                 onBootstrapProgress?.invoke(null)
                 if (bootstrapResult.isSuccess) {
@@ -111,6 +147,15 @@ class TerminalEngine(
             } else {
                 usingProot = false
                 virtualWorkDir = null
+                // Команда пойдёт через системный shell Android: честно помечаем,
+                // что полноценного Linux-окружения сейчас нет (иначе пользователь
+                // видит лишь "apt: not found" и не понимает причину).
+                if (bootstrapFailure == null &&
+                    prootEnvironment.isSupportedArch &&
+                    !prootEnvironment.isBootstrapped
+                ) {
+                    bootstrapFailure = "окружение Ubuntu ещё не настроено"
+                }
             }
 
             val processBuilder = if (usingProot && virtualWorkDir != null) {
@@ -207,7 +252,9 @@ class TerminalEngine(
             }
 
             val bootstrapNote = bootstrapFailure?.let {
-                "Не удалось настроить Linux-окружение: $it. Команда выполнена напрямую через системный shell Android — полноценные инструменты (Gradle, JDK) в нём недоступны."
+                "Linux-окружение недоступно ($it). Команда выполнена через системный shell Android, " +
+                    "поэтому Gradle/JDK и пакеты apt в ней не работают. " +
+                    "Запустите 'setup-ubuntu', чтобы скачать и настроить Ubuntu + OpenJDK."
             }
             val combinedErr = listOfNotNull(bootstrapNote, err).joinToString("\n").ifEmpty { null }
 

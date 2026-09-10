@@ -45,11 +45,11 @@ fun TerminalView(
     val coroutineScope = rememberCoroutineScope()
 
     val quickCommands = listOf(
+        "setup-ubuntu",
+        "java -version",
         "ls -la",
         "pwd",
-        "sh welcome.sh",
-        "cat agent_config.json",
-        "python demo.py",
+        "git --version",
         "help",
         "clear"
     )

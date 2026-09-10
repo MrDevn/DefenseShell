@@ -88,6 +88,9 @@ class ProotEnvironment(
         private const val APT_PACKAGES =
             "openjdk-17-jdk-headless ca-certificates git curl unzip zip file less nano"
 
+        /** Пауза перед автоматическим повтором настройки после неудачи. */
+        private const val BOOTSTRAP_RETRY_COOLDOWN_MS = 2 * 60 * 1000L
+
         // Переменные, которые нужны только самому proot на стороне Android;
         // внутри Ubuntu их быть не должно (пути там не существуют).
         private val HOST_ONLY_ENV = listOf(
@@ -112,13 +115,18 @@ class ProotEnvironment(
     private val loader32Binary: File = File(prootRoot, "libexec/proot/loader32")
 
     private val bootstrapMarker: File = File(prootRoot, ".bootstrap-complete")
+    private val prootStageMarker: File = File(prootRoot, ".stage-proot")
+    private val rootfsStageMarker: File = File(prootRoot, ".stage-rootfs")
+    private val aptStageMarker: File = File(prootRoot, ".stage-apt")
+
+    @Volatile
+    private var lastFailureAt: Long = 0L
 
     val rootfsDir: File get() = fileSystemEngine.linuxRootDir
 
     val isBootstrapped: Boolean
         get() = bootstrapMarker.exists() &&
-            prootBinary.canExecute() && loaderBinary.exists() &&
-            File(prootLibDir, "libtalloc.so.2").exists() &&
+            prootFilesPresent() && rootfsLooksUsable() &&
             File(rootfsDir, "usr/lib/jvm").exists()
 
     val isSupportedArch: Boolean get() = termuxArch() != null && ubuntuArch() != null
@@ -144,30 +152,69 @@ class ProotEnvironment(
      * Окружение, обязательное для запуска proot и для жизни Ubuntu внутри него.
      */
     val requiredEnv: Map<String, String>
-        get() = mapOf(
-            // Termux-сборка proot ищет loader по чужому пути /data/data/com.termux/...
-            "PROOT_LOADER" to loaderBinary.absolutePath,
-            "PROOT_LOADER_32" to loader32Binary.absolutePath,
-            // ...и свой tmp — без переопределения proot падает на записи.
-            "PROOT_TMP_DIR" to prootTmpDir.absolutePath,
-            "PROOT_L2S_DIR" to prootL2sDir.absolutePath,
-            // RUNPATH бинарника указывает на каталог Termux, которого у нас нет,
-            // поэтому libtalloc.so.2 и libandroid-shmem.so ищем через LD_LIBRARY_PATH.
-            "LD_LIBRARY_PATH" to prootLibDir.absolutePath,
-            "HOME" to fileSystemEngine.homeDisplayPath,
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "TERM" to "xterm-256color",
-            "LANG" to "C.UTF-8",
-            "TMPDIR" to "/tmp",
-            "JAVA_HOME" to "/usr/lib/jvm/default-java",
-            "DEBIAN_FRONTEND" to "noninteractive"
-        )
+        get() {
+            val env = linkedMapOf(
+                // Termux-сборка proot ищет loader по чужому пути /data/data/com.termux/...
+                "PROOT_LOADER" to loaderBinary.absolutePath,
+                "PROOT_LOADER_32" to loader32Binary.absolutePath,
+                // ...и свой tmp — без переопределения proot падает на записи.
+                "PROOT_TMP_DIR" to prootTmpDir.absolutePath,
+                "PROOT_L2S_DIR" to prootL2sDir.absolutePath,
+                // RUNPATH бинарника указывает на каталог Termux, которого у нас нет,
+                // поэтому libtalloc.so.2 и libandroid-shmem.so ищем через LD_LIBRARY_PATH.
+                "LD_LIBRARY_PATH" to prootLibDir.absolutePath,
+                "HOME" to fileSystemEngine.homeDisplayPath,
+                "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "TERM" to "xterm-256color",
+                "LANG" to "C.UTF-8",
+                "TMPDIR" to "/tmp",
+                "DEBIAN_FRONTEND" to "noninteractive"
+            )
+            // JAVA_HOME выставляем только если каталог реально существует: gradlew
+            // доверяет JAVA_HOME больше, чем PATH, и с неверным значением падает с
+            // "JAVA_HOME is set to an invalid directory". Без него gradlew берёт
+            // java из PATH, что тоже корректно работает.
+            detectJavaHome()?.let { env["JAVA_HOME"] = it }
+            return env
+        }
+
+    /** Определяет установленный JDK внутри rootfs (путь в координатах Ubuntu). */
+    private fun detectJavaHome(): String? {
+        val jvmDir = File(rootfsDir, "usr/lib/jvm")
+        if (File(jvmDir, "default-java").exists()) return "/usr/lib/jvm/default-java"
+        val candidate = jvmDir.listFiles()
+            ?.filter { it.isDirectory && it.name.startsWith("java-") }
+            ?.sortedByDescending { it.name }
+            ?.firstOrNull()
+        return candidate?.let { "/usr/lib/jvm/${it.name}" }
+    }
 
     /**
      * Полная настройка окружения. Идемпотентна: после успеха повторный вызов
      * сразу возвращает успех.
      */
-    suspend fun bootstrap(onProgress: (String) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun bootstrap(onProgress: (String) -> Unit = {}): Result<Unit> {
+        val result = doBootstrap(onProgress)
+        // После неудачи не долбим сеть на каждой команде: терминал должен
+        // оставаться отзывчивым, а повторить настройку можно явно (setup-ubuntu)
+        // или просто через [BOOTSTRAP_RETRY_COOLDOWN_MS].
+        lastFailureAt = if (result.isFailure) System.currentTimeMillis() else 0L
+        return result
+    }
+
+    /**
+     * True, если предыдущая попытка настройки провалилась совсем недавно и
+     * автоматический повтор пока отложен.
+     */
+    val isInFailureCooldown: Boolean
+        get() = System.currentTimeMillis() - lastFailureAt < BOOTSTRAP_RETRY_COOLDOWN_MS
+
+    /** Сбрасывает cooldown, чтобы следующая команда снова пробовала настройку. */
+    fun resetFailureCooldown() {
+        lastFailureAt = 0L
+    }
+
+    private suspend fun doBootstrap(onProgress: (String) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
         if (isBootstrapped) return@withContext Result.success(Unit)
 
         val termuxArch = termuxArch()
@@ -187,84 +234,104 @@ class ProotEnvironment(
             prootTmpDir.mkdirs()
             prootL2sDir.mkdirs()
 
-            // --- 1. proot + loader'ы + зависимости -----------------------------------
-            onProgress("Скачивание proot...")
-            fetchTermuxPackage(
-                poolPath = "pool/main/p/proot/proot_${PROOT_VERSION}_${termuxArch}.deb",
-                sha256 = PROOT_SHA256[termuxArch]
-            ) { deb -> extractProotBinaries(deb, prootRoot) }
+            // Настройка разбита на этапы с маркерами: при повторной попытке
+            // (например, если apt упал из-за сети) уже скачанные proot и Ubuntu
+            // не загружаются заново.
 
-            onProgress("Скачивание библиотек для proot...")
-            fetchTermuxPackage(
-                poolPath = "pool/main/libt/libtalloc/libtalloc_${LIBTALLOC_VERSION}_${termuxArch}.deb",
-                sha256 = LIBTALLOC_SHA256[termuxArch]
-            ) { deb -> extractSharedLibs(deb, prootLibDir) }
-            fetchTermuxPackage(
-                poolPath = "pool/main/liba/libandroid-shmem/libandroid-shmem_${LIBSHMEM_VERSION}_${termuxArch}.deb",
-                sha256 = LIBSHMEM_SHA256[termuxArch]
-            ) { deb -> extractSharedLibs(deb, prootLibDir) }
+            // --- Этап 1. proot + loader'ы + зависимости ------------------------------
+            val prootStage = "proot=$PROOT_VERSION;talloc=$LIBTALLOC_VERSION;" +
+                "shmem=$LIBSHMEM_VERSION;arch=$termuxArch"
+            if (!stageDone(prootStageMarker, prootStage) || !prootFilesPresent()) {
+                onProgress("Скачивание proot...")
+                fetchTermuxPackage(
+                    poolPath = "pool/main/p/proot/proot_${PROOT_VERSION}_${termuxArch}.deb",
+                    sha256 = PROOT_SHA256[termuxArch]
+                ) { deb -> extractProotBinaries(deb, prootRoot) }
 
-            listOf(prootBinary, loaderBinary, loader32Binary).forEach { it.setExecutable(true, false) }
-            if (!prootBinary.canExecute() || !loaderBinary.exists() ||
-                !File(prootLibDir, "libtalloc.so.2").exists()
-            ) {
-                return@withContext Result.failure(
-                    IllegalStateException("Не удалось распаковать proot, его loader'ы или зависимости")
-                )
-            }
+                onProgress("Скачивание библиотек для proot...")
+                fetchTermuxPackage(
+                    poolPath = "pool/main/libt/libtalloc/libtalloc_${LIBTALLOC_VERSION}_${termuxArch}.deb",
+                    sha256 = LIBTALLOC_SHA256[termuxArch]
+                ) { deb -> extractSharedLibs(deb, prootLibDir) }
+                fetchTermuxPackage(
+                    poolPath = "pool/main/liba/libandroid-shmem/libandroid-shmem_${LIBSHMEM_VERSION}_${termuxArch}.deb",
+                    sha256 = LIBSHMEM_SHA256[termuxArch]
+                ) { deb -> extractSharedLibs(deb, prootLibDir) }
 
-            // --- 2. Ubuntu rootfs ----------------------------------------------------
-            // Гибрид из двух разных дистрибутивов неработоспособен: если раньше
-            // сюда распаковывали Alpine, зачищаем rootfs, сохраняя домашнюю папку.
-            if (File(rootfsDir, "etc/alpine-release").exists()) {
-                onProgress("Удаление старого окружения (ваши файлы сохраняются)...")
-                wipeRootfsPreservingHome()
-            }
-
-            onProgress("Определение контрольных сумм Ubuntu Base...")
-            val rootfsName = "ubuntu-base-$UBUNTU_POINT_RELEASE-base-$ubuntuArch.tar.gz"
-            val rootfsUrl = "https://cdimage.ubuntu.com/ubuntu-base/releases/$UBUNTU_RELEASE/release/$rootfsName"
-            val rootfsFile = File(context.cacheDir, rootfsName)
-            val expectedSha = fetchUbuntuSha256(rootfsName)
-
-            onProgress("Скачивание Ubuntu $UBUNTU_POINT_RELEASE (~30 МБ)...")
-            downloadFile(rootfsUrl, rootfsFile, expectedSha)
-
-            onProgress("Распаковка Ubuntu rootfs...")
-            rootfsDir.mkdirs()
-            extractTarGz(rootfsFile, rootfsDir)
-            rootfsFile.delete()
-
-            // --- 3. Минимальная настройка гостевой системы ---------------------------
-            onProgress("Настройка сети и домашней папки...")
-            File(rootfsDir, "etc").mkdirs()
-            File(rootfsDir, "etc/resolv.conf").writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
-            File(rootfsDir, "root").mkdirs()
-            File(rootfsDir, "tmp").mkdirs()
-            fileSystemEngine.agentHomeDir.mkdirs()
-            ensurePasswdEntry()
-
-            // --- 4. JDK и инструменты ------------------------------------------------
-            onProgress("Установка OpenJDK 17 и инструментов через apt (нужен интернет, несколько минут)...")
-            val install = runProotCommand(
-                "apt-get update -y && apt-get install -y --no-install-recommends $APT_PACKAGES && " +
-                    "apt-get clean -y && rm -rf /var/lib/apt/lists/*",
-                workDirVirtual = "/",
-                home = "/root"
-            )
-            if (install.exitCode != 0) {
-                return@withContext Result.failure(
-                    IllegalStateException(
-                        "apt-get завершился с кодом ${install.exitCode}: " +
-                            (install.errorOutput ?: install.output).take(600)
+                listOf(prootBinary, loaderBinary, loader32Binary).forEach { it.setExecutable(true, false) }
+                if (!prootFilesPresent()) {
+                    return@withContext Result.failure(
+                        IllegalStateException("Не удалось распаковать proot, его loader'ы или зависимости")
                     )
+                }
+                markStage(prootStageMarker, prootStage)
+            }
+
+            // --- Этап 2. Ubuntu rootfs -----------------------------------------------
+            val rootfsStage = "ubuntu=$UBUNTU_POINT_RELEASE;arch=$ubuntuArch"
+            if (!stageDone(rootfsStageMarker, rootfsStage) || !rootfsLooksUsable()) {
+                // Гибрид из двух разных дистрибутивов неработоспособен: если раньше
+                // сюда распаковывали Alpine, зачищаем rootfs, сохраняя домашнюю папку.
+                if (File(rootfsDir, "etc/alpine-release").exists()) {
+                    onProgress("Удаление старого окружения (ваши файлы сохраняются)...")
+                    wipeRootfsPreservingHome()
+                }
+
+                onProgress("Определение контрольных сумм Ubuntu Base...")
+                val rootfsName = "ubuntu-base-$UBUNTU_POINT_RELEASE-base-$ubuntuArch.tar.gz"
+                val rootfsUrl =
+                    "https://cdimage.ubuntu.com/ubuntu-base/releases/$UBUNTU_RELEASE/release/$rootfsName"
+                val rootfsFile = File(context.cacheDir, rootfsName)
+                val expectedSha = fetchUbuntuSha256(rootfsName)
+
+                onProgress("Скачивание Ubuntu $UBUNTU_POINT_RELEASE (~30 МБ)...")
+                downloadFile(rootfsUrl, rootfsFile, expectedSha)
+
+                onProgress("Распаковка Ubuntu rootfs...")
+                rootfsDir.mkdirs()
+                extractTarGz(rootfsFile, rootfsDir)
+                rootfsFile.delete()
+                markStage(rootfsStageMarker, rootfsStage)
+            }
+
+            // --- Этап 3. Настройка гостевой системы ----------------------------------
+            // Выполняется всегда: конфиг apt может отсутствовать даже при уже
+            // распакованном rootfs (например, после прошлой неудачной попытки).
+            onProgress("Настройка сети, домашней папки и apt...")
+            configureGuest()
+
+            // --- Этап 4. JDK и инструменты -------------------------------------------
+            val aptStage = "apt=$UBUNTU_POINT_RELEASE;jdk=17"
+            if (!stageDone(aptStageMarker, aptStage) || !File(rootfsDir, "usr/lib/jvm").exists()) {
+                onProgress("Установка OpenJDK 17 и инструментов через apt (нужен интернет, несколько минут)...")
+                // APT::Sandbox::User=root обязателен: в proot root поддельный, и
+                // штатный сброс привилегий apt на пользователя _apt падает с
+                // "Could not switch saved set-user-ID". update дополнительно
+                // повторяем трижды — сеть на телефоне нестабильна.
+                val apt = "apt-get -o APT::Sandbox::User=root"
+                val aptCommand =
+                    "ok=0; for i in 1 2 3; do $apt update -y && ok=1 && break; sleep 3; done; " +
+                        "if [ \"\$ok\" != \"1\" ]; then echo 'apt-get update: 3 неудачные попытки' >&2; exit 100; fi; " +
+                        "$apt install -y --no-install-recommends $APT_PACKAGES && " +
+                        "$apt clean -y && rm -rf /var/lib/apt/lists/*"
+                val install = runProotCommand(
+                    aptCommand,
+                    workDirVirtual = "/",
+                    home = "/root"
                 )
+                if (install.exitCode != 0) {
+                    return@withContext Result.failure(
+                        IllegalStateException(
+                            "apt-get завершился с кодом ${install.exitCode}: " +
+                                (install.errorOutput ?: install.output).take(900)
+                        )
+                    )
+                }
+                markStage(aptStageMarker, aptStage)
             }
 
             bootstrapMarker.parentFile?.mkdirs()
-            bootstrapMarker.writeText(
-                "proot=$PROOT_VERSION\nubuntu=$UBUNTU_POINT_RELEASE\narch=$ubuntuArch\n"
-            )
+            bootstrapMarker.writeText("$prootStage;$rootfsStage;$aptStage\n")
             onProgress("Окружение Ubuntu готово")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -291,6 +358,9 @@ class ProotEnvironment(
             "-b", "/dev",
             "-b", "/proc",
             "-b", "/sys",
+            // В Android-овском /dev нет /dev/shm, а он нужен JVM и некоторым
+            // инструментам; подставляем вместо него обычную папку внутри rootfs.
+            "-b", "${File(rootfsDir, "var/shm").absolutePath}:/dev/shm",
             "-b", "${fileSystemEngine.primaryStorageDir.absolutePath}:/mnt/android",
             "-w", workingDirVirtualPath,
             "-0",
@@ -320,6 +390,58 @@ class ProotEnvironment(
     // Шаги настройки
     // ------------------------------------------------------------------
 
+    private fun stageDone(marker: File, expected: String): Boolean =
+        marker.exists() && runCatching { marker.readText().trim() == expected }.getOrDefault(false)
+
+    private fun markStage(marker: File, value: String) {
+        marker.parentFile?.mkdirs()
+        marker.writeText("$value\n")
+    }
+
+    private fun prootFilesPresent(): Boolean =
+        prootBinary.canExecute() &&
+            loaderBinary.exists() && loader32Binary.exists() &&
+            File(prootLibDir, "libtalloc.so.2").exists() &&
+            File(prootLibDir, "libandroid-shmem.so").exists()
+
+    private fun rootfsLooksUsable(): Boolean =
+        File(rootfsDir, "bin/bash").exists() &&
+            File(rootfsDir, "etc/os-release").exists() &&
+            !File(rootfsDir, "etc/alpine-release").exists()
+
+    /**
+     * Базовая настройка гостевой Ubuntu: DNS, домашняя папка, passwd и критичный
+     * для proot конфиг apt.
+     */
+    private fun configureGuest() {
+        File(rootfsDir, "etc").mkdirs()
+
+        // В ubuntu-base /etc/resolv.conf — симлинк на /run/systemd/resolve/...,
+        // которого у нас нет: запись через симлинк упала бы с FileNotFoundException.
+        // Поэтому сначала убираем симлинк и создаём обычный файл.
+        val resolvConf = File(rootfsDir, "etc/resolv.conf")
+        runCatching { Os.remove(resolvConf.absolutePath) }
+        resolvConf.parentFile?.mkdirs()
+        resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+
+        File(rootfsDir, "root").mkdirs()
+        File(rootfsDir, "tmp").mkdirs()
+        // Каталог подменяется на /dev/shm внутри proot (в Android-овском /dev его нет).
+        File(rootfsDir, "var/shm").mkdirs()
+        fileSystemEngine.agentHomeDir.mkdirs()
+        ensurePasswdEntry()
+
+        // apt по умолчанию сбрасывает привилегии своих http-методов на пользователя
+        // _apt. В proot root поддельный (-0), поэтому setresuid/getresuid дают
+        // несогласованный результат и метод падает:
+        //   "Could not switch saved set-user-ID" / "Method http has died unexpectedly".
+        // Отключение песочницы apt — штатный способ работы в proot-окружениях
+        // (так же делают UserLAnd и Termux proot-distro).
+        val aptConfDir = File(rootfsDir, "etc/apt/apt.conf.d")
+        aptConfDir.mkdirs()
+        File(aptConfDir, "99proot-sandbox").writeText("APT::Sandbox::User \"root\";\n")
+    }
+
     private fun fetchTermuxPackage(poolPath: String, sha256: String?, consume: (File) -> Unit) {
         val fileName = poolPath.substringAfterLast('/')
         val dest = File(context.cacheDir, fileName)
@@ -331,14 +453,26 @@ class ProotEnvironment(
         }
     }
 
+    /**
+     * Создаёт пользователя codestudio. UID/GID намеренно 1001: в ubuntu-base уже
+     * есть пользователь ubuntu с uid 1000, а дубликаты uid ломают dpkg и apt.
+     */
     private fun ensurePasswdEntry() {
-        val passwd = File(rootfsDir, "etc/passwd")
         val home = fileSystemEngine.homeDisplayPath
-        val line = "codestudio:x:1000:1000:CodeStudio Agent:$home:/bin/bash"
-        val existing = if (passwd.exists()) passwd.readText() else ""
-        if (existing.lines().none { it.startsWith("codestudio:") }) {
-            val prefix = if (existing.isNotBlank() && !existing.endsWith("\n")) "\n" else ""
-            passwd.appendText("$prefix$line\n")
+        val passwd = File(rootfsDir, "etc/passwd")
+        val passwdLine = "codestudio:x:1001:1001:CodeStudio Agent:$home:/bin/bash"
+        val existingPasswd = if (passwd.exists()) passwd.readText() else ""
+        if (existingPasswd.lines().none { it.startsWith("codestudio:") }) {
+            val prefix = if (existingPasswd.isNotBlank() && !existingPasswd.endsWith("\n")) "\n" else ""
+            passwd.appendText("$prefix$passwdLine\n")
+        }
+
+        val group = File(rootfsDir, "etc/group")
+        val groupLine = "codestudio:x:1001:"
+        val existingGroup = if (group.exists()) group.readText() else ""
+        if (existingGroup.lines().none { it.startsWith("codestudio:") }) {
+            val prefix = if (existingGroup.isNotBlank() && !existingGroup.endsWith("\n")) "\n" else ""
+            group.appendText("$prefix$groupLine\n")
         }
     }
 
