@@ -43,6 +43,13 @@ class ExampleRobolectricTest {
     // External path authorization check
     val externalPath = "/sdcard/Defense/Projects"
     val emptyGranted = emptyList<com.example.data.db.entities.GrantedFolderEntity>()
+
+    // Без доступа ко всем файлам и без SAF-гранта внешний путь не авторизован.
+    val app = context as android.app.Application
+    org.robolectric.Shadows.shadowOf(app).denyPermissions(
+        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
     assertEquals(false, fsEngine.isFolderAuthorized(externalPath, emptyGranted))
 
     val granted = listOf(
@@ -54,5 +61,12 @@ class ExampleRobolectricTest {
         )
     )
     assertEquals(true, fsEngine.isFolderAuthorized(externalPath, granted))
+
+    // Когда выдан доступ ко всем файлам, /sdcard авторизован и без точечного SAF-гранта.
+    org.robolectric.Shadows.shadowOf(app).grantPermissions(
+        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+    assertEquals(true, fsEngine.isFolderAuthorized(externalPath, emptyGranted))
   }
 }

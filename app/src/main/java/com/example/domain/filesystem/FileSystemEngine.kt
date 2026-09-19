@@ -250,14 +250,15 @@ $androidMountDisplayRoot/<имя_папки>.
      * полагаться только на него нельзя — иначе /sdcard ложно считается закрытым.
      */
     fun hasAllFilesAccess(): Boolean {
-        val legacyGranted =
+        val legacyGranted = runCatching {
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
                 PackageManager.PERMISSION_GRANTED &&
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
                     PackageManager.PERMISSION_GRANTED)
+        }.getOrDefault(false)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            legacyGranted || Environment.isExternalStorageManager()
+            legacyGranted || runCatching { Environment.isExternalStorageManager() }.getOrDefault(false)
         } else {
             legacyGranted
         }
