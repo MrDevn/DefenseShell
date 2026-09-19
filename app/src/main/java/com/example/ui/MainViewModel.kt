@@ -155,6 +155,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _hasStoragePermission.value = fileSystemEngine.hasAllFilesAccess()
     }
 
+    /** Актуальное состояние доступа к хранилищу (для логики после runtime-запроса). */
+    fun hasStoragePermissionNow(): Boolean = fileSystemEngine.hasAllFilesAccess()
+
     fun getStorageSettingsIntent(): Intent {
         return fileSystemEngine.createAllFilesAccessIntent()
     }
@@ -382,9 +385,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateToDirectory(path: String) {
-        if (!fileSystemEngine.isInsideHome(path) &&
-            grantedFolders.value.none { fileSystemEngine.isFolderAuthorized(path, listOf(it)) }
-        ) {
+        // Авторизация путей централизована в движке: $HOME/песочница — всегда,
+        // /sdcard — при выданном All Files Access, остальное — по сохранённым SAF-грантам.
+        if (!fileSystemEngine.isFolderAuthorized(path, grantedFolders.value)) {
             requestFolderPermission(path)
             return
         }

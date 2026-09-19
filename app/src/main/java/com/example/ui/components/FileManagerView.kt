@@ -76,6 +76,54 @@ fun FileManagerView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // Access-to-storage banner: at targetSdk 28 the correct, complete way to
+        // read/write /sdcard is the "All files access" grant (MANAGE_EXTERNAL_STORAGE
+        // / legacy storage). Without it, only the app-private home works and system
+        // folders require a per-folder SAF pick.
+        if (!hasStoragePermission) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FolderOpen,
+                        contentDescription = null,
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Доступ к /sdcard",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Text(
+                            text = "Чтобы открывать и изменять файлы в Хранилище, Download, Documents и т.д., выдайте разрешение «Доступ ко всем файлам».",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onRequestStoragePermission,
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Выдать", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
         // Quick folder shortcuts
         Row(
             modifier = Modifier

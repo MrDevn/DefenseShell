@@ -126,6 +126,19 @@ fun MainAgentScreen(
             viewModel.dismissFolderPermission()
         }
     }
+
+    // Runtime storage permission (legacy model for targetSdk 28): grants full
+    // /sdcard access through the File API. If still denied on Android 11+, we
+    // fall back to the system "All files access" screen.
+    val storagePermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.checkStoragePermission()
+        viewModel.refreshFiles()
+        if (!viewModel.hasStoragePermissionNow()) {
+            runCatching { context.startActivity(viewModel.getStorageSettingsIntent()) }
+        }
+    }
     var pendingAttachments by remember { mutableStateOf<List<ChatAttachment>>(emptyList()) }
     var attachmentError by remember { mutableStateOf<String?>(null) }
     val attachmentPicker = rememberLauncherForActivityResult(
@@ -701,7 +714,12 @@ fun MainAgentScreen(
                             standardShortcuts = viewModel.standardShortcuts,
                             grantedFolders = grantedFolders,
                             onRequestStoragePermission = {
-                                context.startActivity(viewModel.getStorageSettingsIntent())
+                                storagePermLauncher.launch(
+                                    arrayOf(
+                                        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                    )
+                                )
                             },
                             onRequestNewFolderPermission = {
                                 viewModel.requestNewFolderPermission()

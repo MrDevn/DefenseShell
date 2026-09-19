@@ -133,6 +133,10 @@ $androidMountDisplayRoot/<имя_папки>.
      */
     fun isFolderAuthorized(path: String, grantedFolders: List<GrantedFolderEntity>): Boolean {
         if (isInsideHome(path)) return true
+        // Целостная модель доступа: при выданном All Files Access (targetSdk 28 +
+        // MANAGE_EXTERNAL_STORAGE / legacy) весь /sdcard доступен напрямую через
+        // java.io.File, поэтому отдельные SAF-гранты для внешних папок не нужны.
+        if (hasAllFilesAccess() && isInsideExternalStorage(path)) return true
         if (grantedFolders.isEmpty()) return false
         return try {
             val targetResolved = resolvePath(path)
@@ -148,6 +152,19 @@ $androidMountDisplayRoot/<имя_папки>.
             false
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /** Путь лежит на общем внешнем хранилище (/sdcard, /storage/emulated/0). */
+    private fun isInsideExternalStorage(path: String): Boolean {
+        return try {
+            val resolved = resolvePath(path).canonicalFile
+            val ext = primaryStorageDir.canonicalFile
+            isSameOrInside(resolved.absolutePath, ext.absolutePath)
+        } catch (_: Exception) {
+            val storage = primaryStorageDir.absolutePath
+            path == storage || path.startsWith("$storage/") ||
+                path.startsWith("/sdcard") || path.startsWith("/storage/emulated/0")
         }
     }
 
@@ -213,20 +230,36 @@ $androidMountDisplayRoot/<имя_папки>.
         val defense = File(agentHomeDir, "Defense")
         if (defense.exists() && defense.isDirectory) map["Defense"] = defense
 
+        map["Хранилище (/sdcard)"] = primaryStorageDir
+        listOf("Download", "Documents", "DCIM", "Pictures", "Music").forEach { name ->
+            val dir = File(primaryStorageDir, name)
+            if (dir.exists() && dir.isDirectory) map[name] = dir
+        }
+
         map["Песочница приложения"] = context.filesDir
         map
     }
 
     /**
      * Checks whether the app has full file access on the device.
+     *
+     * Приложение намеренно на targetSdk 28: на Android 11+ оно получает legacy-вид
+     * хранилища (полный доступ к /sdcard через java.io.File) при выданных классических
+     * разрешениях READ/WRITE_EXTERNAL_STORAGE. Тумблер «All files access»
+     * (isExternalStorageManager) для legacy-приложений обычно скрыт, поэтому
+     * полагаться только на него нельзя — иначе /sdcard ложно считается закрытым.
      */
     fun hasAllFilesAccess(): Boolean {
+        val legacyGranted =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                    PackageManager.PERMISSION_GRANTED)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
+            legacyGranted || Environment.isExternalStorageManager()
         } else {
-            val read = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-            val write = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-            read && write
+            legacyGranted
         }
     }
 
